@@ -64,12 +64,13 @@
 		public $refresh_token;
 		public $scope;
 
-		public function __construct($access_token, $token_type, $expires_in = null, $refresh_token = null, $scope = null) {
+		public function __construct($access_token, $token_type, $expires_in = null, $refresh_token = null, $scope = null, $secret = null) {
 			$this->access_token 	= $access_token;
 			$this->token_type 		= $token_type;
 			$this->expires_in 		= $expires_in;
 			$this->refresh_token	= $refresh_token;
 			$this->scope 			= $scope;
+			$this->secret			= $secret;
 		}
 
 		public function toJSON() {
@@ -89,6 +90,10 @@
 
 			if(isset($this->scope)) {
 				$token['scope'] = $this->scope;
+			}
+
+			if(isset($this->secret)) {
+				$token['secret'] = $this->secret;
 			}
 
 			return json_encode($token);

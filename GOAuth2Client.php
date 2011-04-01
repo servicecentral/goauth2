@@ -153,7 +153,8 @@
 				$json_response->token_type,
 				isset($json_response->expires_in) ? $json_response->expires_in : null,
 				isset($json_response->refresh_token) ? $json_response->refresh_token : null,
-				isset($json_response->scope) ? $json_response->scope : null
+				isset($json_response->scope) ? $json_response->scope : null,
+				isset($json_response->secret) ? $json_response->secret : null
 			);
 		}
 
