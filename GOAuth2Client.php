@@ -9,16 +9,16 @@
 	class GOAuth2Client {
 
 		// Unique ID to identify the client to the service provider.
-		private $client_id;
+		protected $client_id;
 
 		// The private secret known only to the client and the service provider.
-		private $client_secret;
+		protected $client_secret;
 
 		// The URI of the service provider's authorization endpoint.
-		private $authorization_uri;
+		protected $authorization_uri;
 
 		// The URI of the service provider's token endpoint.
-		private $token_uri;
+		protected $token_uri;
 
 
 		/**
@@ -158,6 +158,77 @@
 			);
 		}
 
+		/**
+		 * Make an HTTP request to an API endpoint, either via a GET or POST.
+		 * If an access token is passed, the request is formatted to use the
+		 * token's specified method of authentication - for example, if a MAC
+		 * type token is passed, the Authorization header of the request will
+		 * be set as needed.
+		 *
+		 */
+		public function call(GOAuthHttpRequest $request, GOAuth2AccessToken $token = null) {
+
+			// If a token was specified, sign the request as appropriate.
+			if($token) {
+				switch($token->token_type) {
+					case GOAuth2::TOKEN_TYPE_BEARER:
+						$this->addBearerTokenToRequest($request, $token);
+						break;
+					case GOAuth2::TOKEN_TYPE_MAC:
+						$this->addMACTokenToRequest($request, $token);
+						break;
+					default:
+						throw new GOAuth2Exception('');
+				}
+			}
+
+			return $this->sendRequest($request);
+		}
+
+		private function addMACTokenToRequest(GOAuthHttpRequest $request, GOAuth2AccessToken $token) {
+
+			// @todo: This function!
+			return $request;
+			// Generate timestamp and nonce and add to params
+			$timestamp 	= time();
+			$nonce		= uniqid();
+
+			// Normalise request. First break the URI into its component parts.
+			$parsed_uri 			= parse_url($request->uri);
+			$parsed_uri['scheme']	= isset($parsed_uri['scheme']) ? strtolower($parsed_uri['scheme']) : 'http';
+			$parsed_uri['port']		= isset($parsed_uri['port']) ? $parsed_uri['port'] : (($parsed_uri['scheme'] == 'https') ? 443 : 80);
+
+			$request_parts 			= array();
+			$request_parts[] 		= $token->access_token;
+			$request_parts[] 		= $timestamp;
+			$request_parts[] 		= $nonce;
+			$request_parts[] 		= ''; // The 'body hash' - not currently using it.
+			$request_parts[] 		= strtoupper($request->method);
+			$request_parts[]		= strtolower($parsed_uri['host']);
+			$request_parts[]		= $parsed_uri['port'];
+			$request_parts[]		= $parsed_uri['path'];
+			$request_parts[]		= $parsed_uri['query'];
+
+
+			// Sign using HMAC and base64 encode
+			// hash_hmac($algo, $data, $key)
+
+			// Add token, timestamp, nonce and signature to auth header
+
+			return $request;
+		}
+
+		/**
+		 * Add a simple Bearer access token to the request.
+		 *
+		 * @param 	GOAuthHttpRequest $request
+		 * @param 	GOAuth2AccessToken $token
+		 * @return	GOAuthHttpRequest
+		 */
+		private function addBearerTokenToRequest(GOAuthHttpRequest $request, GOAuth2AccessToken $token) {
+			$request->authorization_header = "BEARER {$token->access_token}";
+			return $request;
+		}
 
 		/**
 		 * Make a HTTP request.
@@ -167,12 +238,23 @@
 		 * @return	GOAuthHttpResponse
 		 */
 		public function sendRequest(GOAuthHttpRequest $request) {
+
+			// Set the request headers
+			$headers = array();
+
+			// Add the authorization header if set
+			if(!empty($request->authorization_header)) {
+				$headers[] = 'Authorization: ' . $request->authorization_header;
+				$request->authorization_header = null;
+			}
+
 			// Initialise the cURL handler and set transfer options.
 			$ch = curl_init($request->uri);
 			curl_setopt_array($ch, array(
 				CURLOPT_POST 			=> ($request->method == 'POST') ? 1 : 0,
 				CURLOPT_POSTFIELDS		=> $request->params,
-				CURLOPT_RETURNTRANSFER 	=> 1
+				CURLOPT_RETURNTRANSFER 	=> 1,
+				CURLOPT_HTTPHEADER		=> $headers
 			));
 
 			// Send the actual request.
@@ -181,7 +263,7 @@
 			// Check that the URI was reachable.
 			if ($curl_response === false) {
 				curl_close($ch);
-				throw new GOAuth2Exception();
+				throw new GOAuth2Exception('cURL error');
 			}
 
 			// Close the cURL handler.

@@ -106,16 +106,18 @@
 	 * @package	GOAuth2
 	 */
 	class GOAuthHttpRequest {
+		public $authorization_header;
 		public $method;
 		public $uri;
 		public $params;
 		public $expect_json;
 
-		public function __construct($uri, $method = 'POST', $params = array(), $expect_json = false) {
-			$this->uri 			= $uri;
-			$this->method 		= $method;
-			$this->params 		= $params;
-			$this->expect_json 	= $expect_json;
+		public function __construct($uri, $method = 'POST', $params = array(), $expect_json = false, $authorization_header = null) {
+			$this->uri 					= $uri;
+			$this->method 				= $method;
+			$this->params 				= $params;
+			$this->expect_json 			= $expect_json;
+			$this->authorization_header	= $authorization_header;
 		}
 	}
 
