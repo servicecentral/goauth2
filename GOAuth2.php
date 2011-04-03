@@ -52,6 +52,82 @@
 		public static function getErrorDescription($error) {
 			return self::$error_descriptions[$error];
 		}
+
+
+		/**
+		 * Generate a signature as set out in s3.3.1 of the OAuth 2.0 MAC Token
+		 * specification (draft v2).
+		 *
+		 * @param 	String 	$uri			The URI of the request, including querystring.
+		 * @param 	String 	$access_token	The access token string.
+		 * @param 	String 	$secret			The access token secret.
+		 * @param 	int		$timestamp		The timestamp.
+		 * @param 	String	$nonce			The nonce.
+		 * @param 	String	$http_method	Optional. The HTTP method of the request. Defaults to 'POST'.
+		 * @param 	String	$algorithm		Optional. The algorithm to use. Defaults to SHA1.
+		 * @return	String	A base64-encoded signature string.
+		 */
+		public static function generateHMACSignature($uri, $access_token, $secret, $timestamp, $nonce, $http_method = 'POST', $algorithm = GOAuth2::HMAC_SHA1) {
+
+			// Normalise request. First break the URI into its component parts.
+			$parsed_uri 			= parse_url($uri);
+			$parsed_uri['scheme']	= isset($parsed_uri['scheme']) ? strtolower($parsed_uri['scheme']) : 'http';
+			$parsed_uri['port']		= isset($parsed_uri['port']) ? $parsed_uri['port'] : (($parsed_uri['scheme'] == 'https') ? 443 : 80);
+
+			$request_parts 			= array();
+			$request_parts[] 		= $access_token;
+			$request_parts[] 		= $timestamp;
+			$request_parts[] 		= $nonce;
+			$request_parts[] 		= ''; // The 'body hash' - not currently using it.
+			$request_parts[] 		= strtoupper($http_method);
+			$request_parts[]		= strtolower($parsed_uri['host']);
+			$request_parts[]		= $parsed_uri['port'];
+			$request_parts[]		= $parsed_uri['path'];
+
+			// Normalize the query parameters
+			$query_parts			= isset($parsed_uri['query']) ? explode('&', urldecode($parsed_uri['query'])) : array();
+			$encoded_query_parts	= array();
+			foreach($query_parts as $query_part) {
+
+				// Extract the parameter and its value
+				if(($ep = strpos($query_part, '=')) !== false) {
+					$param = substr($query_part, 0, $ep);
+					$value = substr($query_part, $ep + 1);
+				} else {
+					$param = $query_part;
+					$value = '';
+				}
+
+				// Append the "param="value" to the return array, with URL-encoding.
+				// The OAuth MAC spec requires spaces to be %20-ed rather than +-encoded.
+				$encoded_query_parts[] = str_replace('+', '%20', urlencode($param)) . '=' . str_replace('+', '%20', urlencode($value));
+			}
+
+			// Order the query parts and append to the overall array
+			sort($encoded_query_parts);
+			$request_parts = array_merge($request_parts, $encoded_query_parts);
+
+			// Implode the request with newline characters and add a trailing newline
+			$normalized_request	= implode("\n", $request_parts) . "\n";
+
+			// Convert the OAuth-specified algorithm name to the version used by PHP's hash_hmac
+			switch($algorithm) {
+				case GOAuth2::HMAC_SHA1:
+					$hash_hmac_algorithm = 'sha1';
+					break;
+				case GOAuth2::HMAC_SHA256:
+					$hash_hmac_algorithm = 'sha256';
+					break;
+				default:
+					throw new GOAuth2Exception('unknown_algorithm', 'Unknown algorithm passed to getSignature().');
+			}
+
+			// Generate the signature
+			$signature = hash_hmac($hash_hmac_algorithm, $normalized_request, $secret, $raw_output = true);
+
+			// Base64-encode the signature and return.
+			return base64_encode($signature);
+		}
 	}
 
 
@@ -116,77 +192,6 @@
 			$this->params 				= $params;
 			$this->expect_json 			= $expect_json;
 			$this->authorization_header	= $authorization_header;
-		}
-
-		/**
-		 * Get the signature of this request for use with signature-based
-		 * token mechanisms, as set out in s3.3.1 of the OAuth 2.0 MAC Token
-		 * specification (draft v2).
-		 *
-		 * @param GOAuth2AccessToken 	$token		The token being used to sign the request.
-		 * @param int					$timestamp	A unix timestamp.
-		 * @param String				$nonce		A nonce for this request.
-		 */
-		public function getSignature(GOAuth2AccessToken $token, $timestamp, $nonce) {
-
-			// Normalise request. First break the URI into its component parts.
-			$parsed_uri 			= parse_url($this->uri);
-			$parsed_uri['scheme']	= isset($parsed_uri['scheme']) ? strtolower($parsed_uri['scheme']) : 'http';
-			$parsed_uri['port']		= isset($parsed_uri['port']) ? $parsed_uri['port'] : (($parsed_uri['scheme'] == 'https') ? 443 : 80);
-
-			$request_parts 			= array();
-			$request_parts[] 		= $token->access_token;
-			$request_parts[] 		= $timestamp;
-			$request_parts[] 		= $nonce;
-			$request_parts[] 		= ''; // The 'body hash' - not currently using it.
-			$request_parts[] 		= strtoupper($this->method);
-			$request_parts[]		= strtolower($parsed_uri['host']);
-			$request_parts[]		= $parsed_uri['port'];
-			$request_parts[]		= $parsed_uri['path'];
-
-			// Normalize the query parameters
-			$query_parts			= isset($parsed_uri['query']) ? explode('&', urldecode($parsed_uri['query'])) : array();
-			$encoded_query_parts	= array();
-			foreach($query_parts as $query_part) {
-
-				// Extract the parameter and its value
-				if(($ep = strpos($query_part, '=')) !== false) {
-					$param = substr($query_part, 0, $ep);
-					$value = substr($query_part, $ep + 1);
-				} else {
-					$param = $query_part;
-					$value = '';
-				}
-
-				// Append the "param="value" to the return array, with URL-encoding.
-				// The OAuth MAC spec requires spaces to be %20-ed rather than +-encoded.
-				$encoded_query_parts[] = str_replace('+', '%20', urlencode($param)) . '=' . str_replace('+', '%20', urlencode($value));
-			}
-
-			// Order the query parts and append to the overall array
-			sort($encoded_query_parts);
-			$request_parts = array_merge($request_parts, $encoded_query_parts);
-
-			// Implode the request with newline characters and add a trailing newline
-			$normalized_request	= implode("\n", $request_parts) . "\n";
-
-			// Convert the OAuth-specified algorithm name to the version used by PHP's hash_hmac
-			switch($token->algorithm) {
-				case GOAuth2::HMAC_SHA1:
-					$hash_hmac_algorithm = 'sha1';
-					break;
-				case GOAuth2::HMAC_SHA256:
-					$hash_hmac_algorithm = 'sha256';
-					break;
-				default:
-					throw new GOAuth2Exception('unknown_algorithm', 'Unknown algorithm passed to getSignature().');
-			}
-
-			// Generate the signature
-			$signature = hash_hmac($hash_hmac_algorithm, $normalized_request, $token->secret, $raw_output = true);
-
-			// Base64-encode the signature and return.
-			return base64_encode($signature);
 		}
 	}
 

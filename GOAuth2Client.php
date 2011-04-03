@@ -306,7 +306,8 @@
 			// Generate timestamp and nonce and add to params
 			$timestamp 	= time();
 			$nonce		= uniqid();
-			$signature 	= $request->getSignature($token, $timestamp, $nonce);
+			$signature 	= GOAuth2::generateHMACSignature($request->uri, $token->access_token, $token->secret, $timestamp, $nonce, $request->method, $hmac_algorithm);
+
 
 			// Add token, timestamp, nonce and signature to auth header
 			$header_parts = array(
