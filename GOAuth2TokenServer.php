@@ -14,12 +14,16 @@
 		// The method the token server uses to authenticate clients.
 		protected $client_auth_method;
 
+		// The algorithm used to generate HMAC signature.
+		protected $hmac_algorithm;
+
 		// An array of URIs, indexed by error type, that may be provided to the client.
 		protected $error_uris 		= array();
 
-		public function __construct($token_type = GoAuth2::TOKEN_TYPE_MAC, $client_auth_method = GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS) {
+		public function __construct($token_type = GoAuth2::TOKEN_TYPE_MAC, $client_auth_method = GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $hmac_algorithm = GOAuth2::HMAC_SHA1) {
 			$this->token_type			= $token_type;
 			$this->client_auth_method 	= $client_auth_method;
+			$this->hmac_algorithm		= $hmac_algorithm;
 		}
 
 		/**
@@ -63,7 +67,7 @@
 			$scope			= isset($post['scope']) ? $post['scope'] : null;
 
 			// Authenticate the client request
-			$this->authenticateClientRequest($client_id, $client_secret, $scope, $authorization_header);
+			$this->authenticateClientRequest($client_id, $client_secret, $authorization_header);
 
 			// Check that a username and password was passed
 			if(empty($username) || empty($password)) {
@@ -72,6 +76,9 @@
 
 			// Validate the resource owner credentials
 			$this->validateResourceOwnerCredentials($username, $password);
+
+			// Check that the scope requested is permissible
+			$this->checkTokenRequestScope($client_id, $username, $scope);
 
 			// Get a new token
 			$token = $this->generateAccessToken($client_id, $username, $scope);
@@ -102,6 +109,8 @@
 				$this->sendErrorResponse(GoAuth2::ERROR_INVALID_REQUEST);
 			}
 
+			// @todo: Check the scope is valid?
+
 			// Refresh the access token
 			$token = $this->refreshAccessToken($client_id, $refresh_token, $scope);
 
@@ -126,7 +135,10 @@
 			$scope			= isset($post['scope']) ? $post['scope'] : null;
 
 			// Authenticate the client request
-			$this->authenticateClientRequest($client_id, $client_secret, $scope, $authorization_header);
+			$this->authenticateClientRequest($client_id, $client_secret, $authorization_header);
+
+			// Check that the scope requested is permissible
+			$this->checkTokenRequestScope($client_id, $for_user = null, $scope);
 
 			// Get a new access token
 			$token = $this->generateAccessToken($client_id, $for_user = null, $scope);
@@ -147,10 +159,9 @@
 		 *
 		 * @param String 	$client_id
 		 * @param String 	$client_secret
-		 * @param array		$scope
 		 * @param String	$authorization_header
 		 */
-		private function authenticateClientRequest($client_id, $client_secret, $scope, $authorization_header) {
+		private function authenticateClientRequest($client_id, $client_secret, $authorization_header) {
 
 			switch($this->client_auth_method) {
 				case GOAuth2::SERVER_AUTH_TYPE_ANONYMOUS:
@@ -171,7 +182,7 @@
 					}
 
 					// Authenticate the client id and client secret
-					$this->authenticateClientCredentials($client_id, $client_secret, $scope);
+					$this->authenticateClientCredentials($client_id, $client_secret);
 
 					// Authentication was successful.
 					return;
@@ -252,10 +263,30 @@
 		 *
 		 * @param String	$client_id
 		 * @param String	$client_secret
-		 * @param String	$scope
 		 */
-		protected function authenticateClientCredentials($client_id, $client_secret, $scope = null) {
+		protected function authenticateClientCredentials($client_id, $client_secret) {
 			throw new Exception('authenticateClientCredentials() not implemented by server.');
+		}
+
+
+		/**
+		 * Check that the specified client is permitted to obtain an access token
+		 * of the specified scope for the specified user.  Both the user and scope
+		 * parameters are optional, as a client may request a token for themselves
+		 * (not on behalf of a user) and the 'scope' parameter is an optional
+		 * request parameter.  There may be only one default scope or your server
+		 * implementation may treat a lack of scope specificity as a request for
+		 * the maximum permitted scope.
+		 *
+		 * @param String	$client_id	The ID of the client who is requesting the token.
+		 * @param String	$for_user	Optional. If given, represents the username of the
+		 * 								resource owner on whose behalf the token is being
+		 * 								requested.
+		 * @param String	$scope		Optional. If given, is a space-delimited string of
+		 * 								requested scopes.
+		 */
+		protected function checkTokenRequestScope($client_id, $for_user = null, $scope = null) {
+			throw new Exception('checkTokenRequestScope() not implemented by server.');
 		}
 
 
@@ -270,9 +301,8 @@
 		 * 								the username of the resource
 		 * 								owner on whose behalf the token
 		 * 								is being generated.
-		 * @param	String	$scope		Optional. If given, an array of
-		 * 								permission scopes this token
-		 * 								should represent.
+		 * @param	String	$scope		Optional. If given, a string of
+		 * 								space-delimited scope names.
 		 */
 		protected function generateAccessToken($client_id, $for_user = null, $scope = null) {
 			throw new Exception('generateAccessToken() not implemented by server.');
@@ -288,9 +318,8 @@
 		 * 									the token.
 		 * @param	String	$refresh_token	The refresh token provided by
 		 * 									the client.
-		 * @param	String	$scope			Optional. If given, an array of
-		 * 									permission scopes this token
-		 * 									should represent.
+		 * @param	String	$scope			Optional. If given, a string of
+		 * 									space-delimited scope names.
 		 */
 		protected function refreshAccessToken($client_id, $refresh_token, $scope = null) {
 			throw new Exception('refreshAccessToken() not implemented by server.');
@@ -312,9 +341,8 @@
 		 * 									the token.
 		 * @param	String	$refresh_token	The refresh token provided by
 		 * 									the client.
-		 * @param	array	$scope			Optional. If given, an array of
-		 * 									permission scopes this token
-		 * 									should represent.
+		 * @param	String	$scope			Optional. If given, a string of
+		 * 									space-delimited scope names.
 		 */
 		protected function validateResourceOwnerCredentials($username, $password) {
 			throw new Exception('validateResourceOwnerCredentials() not implemented by server.');
