@@ -57,6 +57,42 @@
 		}
 
 
+		/**
+		 * Handle a request for an access token using just the client credentials.
+		 * This flow is used when the client would like to obtain access on behalf
+		 * of itself.
+		 *
+		 * @param array		$post					The POST array given with the request.
+		 * @param String	$authorization_header	The contents of the Authorization: header.
+		 */
+		private function handleTokenRequestWithClientCredentials($post, $authorization_header) {
+
+			// Get the client_id, client_secret and scope parameters from the POST if present.
+			$client_id 		= isset($post['client_id']) ? $post['client_id'] : null;
+			$client_secret 	= isset($post['client_secret']) ? $post['client_secret'] : null;
+			$scope			= isset($post['scope']) ? $post['scope'] : null;
+
+			// Authenticate the client request
+			$this->authenticateClientRequest($client_id, $client_secret, $authorization_header);
+
+			// Check that the scope requested is permissible
+			$this->checkTokenRequestScope($client_id, $for_user = null, $scope);
+
+			// Get a new access token
+			$token = $this->generateAccessToken($client_id, $for_user = null, $scope);
+
+			// Send the generated token back to the client
+			$this->sendResponse(GOAuth2::HTTP_200, $token->toJSON(), GOAuth2::CONTENT_TYPE_JSON, $no_store = true);
+		}
+
+
+		/**
+		 * Handle a request to obtain an access token with the resource owner username
+		 * and password.
+		 *
+		 * @param array 	$post					The POST array of the request.
+		 * @param String 	$authorization_header	The contents of the Authorization header.
+		 */
 		private function handleTokenRequestWithPassword($post, $authorization_header) {
 
 			// Get the client_id, client_secret, username, password and scope parameters from the POST if present.
@@ -109,39 +145,8 @@
 				$this->sendErrorResponse(GoAuth2::ERROR_INVALID_REQUEST);
 			}
 
-			// @todo: Check the scope is valid?
-
 			// Refresh the access token
 			$token = $this->refreshAccessToken($client_id, $refresh_token, $scope);
-
-			// Send the generated token back to the client
-			$this->sendResponse(GOAuth2::HTTP_200, $token->toJSON(), GOAuth2::CONTENT_TYPE_JSON, $no_store = true);
-		}
-
-
-		/**
-		 * Handle a request for an access token using just the client credentials.
-		 * This flow is used when the client would like to obtain access on behalf
-		 * of itself.
-		 *
-		 * @param array		$post					The POST array given with the request.
-		 * @param String	$authorization_header	The contents of the Authorization: header.
-		 */
-		private function handleTokenRequestWithClientCredentials($post, $authorization_header) {
-
-			// Get the client_id, client_secret and scope parameters from the POST if present.
-			$client_id 		= isset($post['client_id']) ? $post['client_id'] : null;
-			$client_secret 	= isset($post['client_secret']) ? $post['client_secret'] : null;
-			$scope			= isset($post['scope']) ? $post['scope'] : null;
-
-			// Authenticate the client request
-			$this->authenticateClientRequest($client_id, $client_secret, $authorization_header);
-
-			// Check that the scope requested is permissible
-			$this->checkTokenRequestScope($client_id, $for_user = null, $scope);
-
-			// Get a new access token
-			$token = $this->generateAccessToken($client_id, $for_user = null, $scope);
 
 			// Send the generated token back to the client
 			$this->sendResponse(GOAuth2::HTTP_200, $token->toJSON(), GOAuth2::CONTENT_TYPE_JSON, $no_store = true);
@@ -197,7 +202,7 @@
 
 		/**
 		 * Send an error response from the server as specified by the OAuth 2.0
-		 * specification.  This requires a JSON response with and "error" field
+		 * specification.  This requires a JSON response with an "error" field
 		 * and optional description and URI fields.
 		 *
 		 * @param String	$error	A string representing one of the error types
@@ -208,7 +213,7 @@
 			// Create the JSON response object
 			$error_object = array(
 				'error' 			=> $error,
-				'error_description'	=> GoAuth2::getErrorDescription($error)
+				'error_description'	=> GOAuth2::getErrorDescription($error)
 			);
 
 			// Append the error URI if defined
@@ -219,14 +224,18 @@
 			// Encode the error into JSON
 			$error_json = json_encode($error_object);
 
-			// Send an HTTP 400 response
-			$this->sendResponse(GOAuth2::HTTP_400, $error_json);
+			// Get the appropriate HTTP response code for this type of error
+			$http_response_code = GOAuth2::getErrorHttpStatusCode($error);
+
+			// Send the HTTP response
+			$this->sendResponse($http_response_code, $error_json);
 		}
+
 
 		/**
 		 * Send an HTTP response to the client.
 		 *
-		 * @param 	int 	$status			The code of the HTTP response code to send.
+		 * @param 	int 	$status			The HTTP response status code to send.
 		 * @param	String	$response		The body of the response.
 		 * @param	String	$content_type	Optional .The content type of the response.
 		 * 									Defaults to 'application/json'.
@@ -255,19 +264,10 @@
 
 
 		/**
-		 * Authenticate the given client credentials.  This function MUST be
-		 * reimplemented in the inheriting server subclass if that server
-		 * utilises the client credentials authentication method. The function
-		 * implementation MUST call the sendErrorResponse() method on a failed
-		 * authentication.
+		 * FUNCTIONS WHICH REQUIRE REIMPLEMENTATION
 		 *
-		 * @param String	$client_id
-		 * @param String	$client_secret
+		 * The following functions MUST be implemented in any inheriting subclass.
 		 */
-		protected function authenticateClientCredentials($client_id, $client_secret) {
-			throw new Exception('authenticateClientCredentials() not implemented by server.');
-		}
-
 
 		/**
 		 * Check that the specified client is permitted to obtain an access token
@@ -277,6 +277,8 @@
 		 * request parameter.  There may be only one default scope or your server
 		 * implementation may treat a lack of scope specificity as a request for
 		 * the maximum permitted scope.
+		 *
+		 * This function MUST be reimplemented in the inheriting subclass.
 		 *
 		 * @param String	$client_id	The ID of the client who is requesting the token.
 		 * @param String	$for_user	Optional. If given, represents the username of the
@@ -289,11 +291,11 @@
 			throw new Exception('checkTokenRequestScope() not implemented by server.');
 		}
 
-
 		/**
 		 * Generate and store an access token for the given client with
-		 * the given scope.  This function MUST be reimplemented in the
-		 * inheriting subclass.
+		 * the given scope.
+		 *
+		 * This function MUST be reimplemented in the inheriting subclass.
 		 *
 		 * @param	String	$client_id	The ID of the client to be given
 		 * 								the token.
@@ -308,11 +310,11 @@
 			throw new Exception('generateAccessToken() not implemented by server.');
 		}
 
-
 		/**
 		 * Refresh and store an access token for the given client with
-		 * the given scope.  This function MUST be reimplemented in the
-		 * inheriting subclass.
+		 * the given scope.
+		 *
+		 * This function MUST be reimplemented in the inheriting subclass.
 		 *
 		 * @param	String	$client_id		The ID of the client to be given
 		 * 									the token.
@@ -327,9 +329,30 @@
 
 
 		/**
-		 * Validate the given resource owner credentials. This function MUST be
-		 * reimplemented in the inheriting subclass _if_ the server needs to
-		 * support this flow of access token grant.
+		 * FUNCTIONS THAT MAY BE OPTIONALLY REIMPLEMENTED
+		 *
+		 * The following functions MUST be reimplemented in any inheriting subclass
+		 * IF the inheriting Token Server needs to support the relevant feature.
+		 */
+
+		/**
+		 * Authenticate the given client credentials.  This function must be
+		 * reimplemented in the inheriting server subclass if that server
+		 * utilises the client credentials authentication method. The function
+		 * implementation MUST call the sendErrorResponse() method on a failed
+		 * authentication.
+		 *
+		 * @param String	$client_id
+		 * @param String	$client_secret
+		 */
+		protected function authenticateClientCredentials($client_id, $client_secret) {
+			throw new Exception('authenticateClientCredentials() not implemented by server.');
+		}
+
+		/**
+		 * Validate the given resource owner credentials. This function must be
+		 * reimplemented in the inheriting subclass if the server needs to
+		 * support the resource owner credentials flow of access token grant.
 		 *
 		 * The OAuth specification notes that this flow should only be used
 		 * where there is a high level of trust between the resource owner

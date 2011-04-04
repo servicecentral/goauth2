@@ -26,36 +26,79 @@
 		const ERROR_UNSUPPORTED_GRANT_TYPE	= 'unsupported_grant_type';
 		const ERROR_INVALID_SCOPE			= 'invalid_scope';
 
+		// These errors are NOT defined by the OAuth2.0 protocol
+		const ERROR_INTERNAL_ERROR			= 'internal_error';
+
 		const TOKEN_TYPE_BEARER				= 'bearer';
 		const TOKEN_TYPE_MAC				= 'mac';
 
 		const HMAC_SHA1						= 'hmac-sha-1';
 		const HMAC_SHA256					= 'hmac-sha-256';
 
-		const HTTP_200 = 'HTTP/1.1 200 OK';
-		const HTTP_301 = 'HTTP/1.1 301 Moved Permanantly';
-		const HTTP_400 = 'HTTP/1.1 400 Bad Request';
-		const HTTP_401 = 'HTTP/1.1 401 Unauthorized';
-		const HTTP_403 = 'HTTP/1.1 403 Forbidden';
-		const HTTP_404 = 'HTTP/1.1 404 File Not Found';
-		const HTTP_410 = 'HTTP/1.1 410 Gone';
-		const HTTP_500 = 'HTTP/1.1 500 Internal Server Error';
-		const HTTP_503 = 'HTTP/1.1 503 Service Unavailable';
+		const HTTP_200 						= 'HTTP/1.1 200 OK';
+		const HTTP_301 						= 'HTTP/1.1 301 Moved Permanantly';
+		const HTTP_400 						= 'HTTP/1.1 400 Bad Request';
+		const HTTP_401 						= 'HTTP/1.1 401 Unauthorized';
+		const HTTP_403 						= 'HTTP/1.1 403 Forbidden';
+		const HTTP_404 						= 'HTTP/1.1 404 File Not Found';
+		const HTTP_410 						= 'HTTP/1.1 410 Gone';
+		const HTTP_500 						= 'HTTP/1.1 500 Internal Server Error';
+		const HTTP_503 						= 'HTTP/1.1 503 Service Unavailable';
 
-		const CONTENT_TYPE_JSON = 'application/json';
-
-		private static $error_descriptions = array(
-			self::ERROR_INVALID_REQUEST => 'The request is missing a required parameter, includes an unsupported parameter or parameter value, repeats a parameter, includes multiple credentials, utilizes more than one mechanism for authenticating the client, or is otherwise malformed.',
-			self::ERROR_INVALID_CLIENT 	=> 'Client authentication failed.'
-		);
-
-		public static function getErrorDescription($error) {
-			return self::$error_descriptions[$error];
-		}
+		const CONTENT_TYPE_JSON 			= 'application/json';
+		const CONTENT_TYPE_XML 				= 'text/xml';
 
 
 		/**
-		 * Generate a signature as set out in s3.3.1 of the OAuth 2.0 MAC Token
+		 * Get an error description for the specified code.
+		 *
+		 * @param 	String 	$error
+		 * @return	String	An error description.
+		 */
+		public static function getErrorDescription($error) {
+			if(!isset(self::$error_descriptions[$error])) {
+				return 'Unknown error.';
+			}
+			return self::$error_descriptions[$error];
+		}
+
+		private static $error_descriptions = array(
+			self::ERROR_INVALID_REQUEST 		=> 'The request is missing a required parameter or is otherwise malformed.',
+			self::ERROR_INVALID_CLIENT 			=> 'Client authentication failed.',
+			self::ERROR_INVALID_GRANT 			=> 'The provided authorization grant is invalid, expired or revoked.',
+			self::ERROR_UNAUTHORIZED_CLIENT 	=> 'The authenticated client is not authorized to use the specified grant type.',
+			self::ERROR_UNSUPPORTED_GRANT_TYPE 	=> 'The authorization grant type is not supported by this server.',
+			self::ERROR_INVALID_SCOPE 			=> 'The requested scope is unknown, invalid, malformed or exceed the permissible scope.',
+			self::ERROR_INTERNAL_ERROR 			=> 'An internal server error occured while processing the request.'
+		);
+
+
+		/**
+		 * Get the HTTP response status code for the given error.
+		 *
+		 * @param	String	$error
+		 * @return	String	A HTTP response status code.
+		 */
+		public static function getErrorHttpStatusCode($error) {
+			if(!isset(self::$error_http_codes[$error])) {
+				return self::HTTP_500; // Internal Server Error
+			}
+			return self::$error_http_codes[$error];
+		}
+
+		private static $error_http_codes = array(
+			self::ERROR_INVALID_REQUEST 		=> self::HTTP_400, // Bad Request
+			self::ERROR_INVALID_CLIENT 			=> self::HTTP_401, // Unauthorized
+			self::ERROR_INVALID_GRANT 			=> self::HTTP_401, // Unauthorized
+			self::ERROR_UNAUTHORIZED_CLIENT 	=> self::HTTP_403, // Forbidden
+			self::ERROR_UNSUPPORTED_GRANT_TYPE 	=> self::HTTP_400, // Bad Request
+			self::ERROR_INVALID_SCOPE 			=> self::HTTP_400, // Bad Request
+			self::ERROR_INTERNAL_ERROR 			=> self::HTTP_500  // Internal Server Error
+		);
+
+
+		/**
+		 * Generate a request signature as set out in s3.3.1 of the OAuth 2.0 MAC Token
 		 * specification (draft v2).
 		 *
 		 * @param 	String 	$uri			The URI of the request, including querystring.
@@ -75,14 +118,14 @@
 			$parsed_uri['port']		= isset($parsed_uri['port']) ? $parsed_uri['port'] : (($parsed_uri['scheme'] == 'https') ? 443 : 80);
 
 			$request_parts 			= array();
-			$request_parts[] 		= $access_token;
-			$request_parts[] 		= $timestamp;
-			$request_parts[] 		= $nonce;
-			$request_parts[] 		= ''; // The 'body hash' - not currently using it.
-			$request_parts[] 		= strtoupper($http_method);
-			$request_parts[]		= strtolower($parsed_uri['host']);
-			$request_parts[]		= $parsed_uri['port'];
-			$request_parts[]		= $parsed_uri['path'];
+			$request_parts[] 		= $access_token;					// The access token used for the request.
+			$request_parts[] 		= $timestamp;						// The timestamp for the request.
+			$request_parts[] 		= $nonce;							// The unique 'number used once' for the request.
+			$request_parts[] 		= ''; 								// The 'body hash' parameter (not currently used).
+			$request_parts[] 		= strtoupper($http_method);			// The HTTP metod (eg 'POST' or 'GET')
+			$request_parts[]		= strtolower($parsed_uri['host']);	// The URI hostname (eg example.com)
+			$request_parts[]		= $parsed_uri['port'];				// The port of the request (eg 80)
+			$request_parts[]		= $parsed_uri['path'];				// The path of the request (eg '/api/v1')
 
 			// Normalize the query parameters
 			$query_parts			= isset($parsed_uri['query']) ? explode('&', urldecode($parsed_uri['query'])) : array();
@@ -145,6 +188,19 @@
 		public $secret;
 		public $algorithm;
 
+
+		/**
+		 * Access Token Constructor.
+		 *
+		 * @param 	String 	$access_token	The access token string.
+		 * @param 	String 	$token_type		The type of the token (such as 'mac' or 'bearer')
+		 * @param 	int		$expires_in		Optional. The number of seconds until this token expires.
+		 * @param 	String 	$refresh_token	Optional. The refresh token string.
+		 * @param 	String 	$scope			Optional. A space-delimited string listing scopes this token is valid for.
+		 * @param 	String 	$secret			Optional. The token secret string.
+		 * @param 	String 	$algorithm		Optional. The algorithm that should be used with this token to generate signatures.
+		 * @return	GOAuth2AccessToken
+		 */
 		public function __construct($access_token, $token_type, $expires_in = null, $refresh_token = null, $scope = null, $secret = null, $algorithm = null) {
 			$this->access_token 	= $access_token;
 			$this->token_type 		= $token_type;
@@ -155,8 +211,14 @@
 			$this->algorithm		= $algorithm;
 		}
 
+
+		/**
+		 * Return a JSON string representing this access token.
+		 * @return	String	A JSON-formatted string.
+		 */
 		public function toJSON() {
 
+			// Set the required parameters
 			$token = array(
 				'access_token' 	=> $this->access_token,
 				'token_type'	=> $this->token_type
@@ -170,6 +232,7 @@
 				}
 			}
 
+			// Return the JSON encoding
 			return json_encode($token);
 		}
 	}
@@ -179,31 +242,18 @@
 	 * A HTTP Request.
 	 * @package	GOAuth2
 	 */
-	class GOAuthHttpRequest {
+	class GOAuth2HttpRequest {
 		public $authorization_header;
 		public $method;
 		public $uri;
 		public $params;
-		public $expect_json;
 
-		public function __construct($uri, $method = 'POST', $params = array(), $expect_json = false, $authorization_header = null) {
+		public function __construct($uri, $method = 'POST', $params = array(), $authorization_header = null) {
 			$this->uri 					= $uri;
 			$this->method 				= $method;
 			$this->params 				= $params;
-			$this->expect_json 			= $expect_json;
 			$this->authorization_header	= $authorization_header;
 		}
-	}
-
-
-	/**
-	 * A HTTP Response.
-	 * @package GOAuth2
-	 */
-	class GOAuthHttpResponse {
-		public $status_code;
-		public $headers;
-		public $response;
 	}
 
 
@@ -224,30 +274,19 @@
 	}
 
 	// Thrown when a connection could not be established.
-	class GOAuth2ConnectionException extends GOAuth2Exception {}
+	class GOAuth2ConnectionException 			extends GOAuth2Exception {}
 
 	// Thrown when the response from the server is invalid.
-	class GOAuth2InvalidResponseException extends GOAuth2Exception {}
+	class GOAuth2InvalidResponseException 		extends GOAuth2Exception {}
 
 	// Thrown when a call attempt is made without an active token
-	class GOAuth2NoActiveTokenException extends GOAuth2Exception {}
+	class GOAuth2NoActiveTokenException 		extends GOAuth2Exception {}
 
 	/* The following Exception types mirror the errors that may be returned
 	 * by an OAuth2.0 Token Server as defined s5.2 of the specification. */
-	class GOAuth2InvalidRequestException extends  GOAuth2Exception {}
-	class GOAuth2InvalidClientException extends  GOAuth2Exception {}
-	class GOAuth2InvalidGrantException extends  GOAuth2Exception {}
-	class GOAuth2UnauthorizedClientException extends  GOAuth2Exception {}
-	class GOAuth2UnsupportedGrantTypeException extends  GOAuth2Exception {}
-	class GOAuth2InvalidScopeException extends  GOAuth2Exception {}
-
-
-	/**
-	 * A handy function to avoid verbose $a = isset($b) ? $b : null statements.
-	 *
-	 * @param mixed $var
-	 * @param mixed $ifnot
-	 */
-	function ifset($var, $ifnot = null) {
-		return isset($var) ? $var : $ifnot;
-	}
+	class GOAuth2InvalidRequestException 		extends  GOAuth2Exception {}
+	class GOAuth2InvalidClientException 		extends  GOAuth2Exception {}
+	class GOAuth2InvalidGrantException 			extends  GOAuth2Exception {}
+	class GOAuth2UnauthorizedClientException 	extends  GOAuth2Exception {}
+	class GOAuth2UnsupportedGrantTypeException 	extends  GOAuth2Exception {}
+	class GOAuth2InvalidScopeException 			extends  GOAuth2Exception {}

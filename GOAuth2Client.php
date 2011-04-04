@@ -123,7 +123,7 @@
 			}
 
 			// Construct and make the token request.
-			$token_request = new GOAuthHttpRequest($this->token_uri, 'POST', $params, $expect_json = true);
+			$token_request = new GOAuth2HttpRequest($this->token_uri, 'POST', $params);
 
 			// Make the token request.
 			return $this->makeTokenRequest($token_request);
@@ -152,7 +152,7 @@
 			}
 
 			// Construct and make the token request.
-			$token_request = new GOAuthHttpRequest($this->token_uri, 'POST', $params, $expect_json = true);
+			$token_request = new GOAuth2HttpRequest($this->token_uri, 'POST', $params);
 
 			// Make the token request.
 			return $this->makeTokenRequest($token_request);
@@ -182,7 +182,7 @@
 			}
 
 			// Construct and make the refresh request.
-			$refresh_request = new GOAuthHttpRequest($this->token_uri, 'POST', $params, $expect_json = true);
+			$refresh_request = new GOAuth2HttpRequest($this->token_uri, 'POST', $params);
 
 			// Make the token request.
 			return $this->makeTokenRequest($refresh_request);
@@ -192,14 +192,15 @@
 		/**
 		 * Make a request for a token as specified by the request parameter.
 		 *
-		 * @param 	GOAuthHttpRequest $request
+		 * @param 	GOAuth2HttpRequest $request
 		 * @throws	GOAuth2TokenException
 		 * @return	GOAuth2AccessToken
 		 */
-		private function makeTokenRequest(GOAuthHttpRequest $request) {
+		private function makeTokenRequest(GOAuth2HttpRequest $request) {
 
 			// Make the request and get the JSON response.
-			$response = $this->sendRequest($request);
+			$json_response 	= $this->sendRequest($request);
+			$response 		= json_decode($json_response);
 
 			// If a known error was returned, throw an exception.
 			if(isset($response->error)) {
@@ -224,8 +225,6 @@
 
 			// Add this token to our cache
 			$this->addToken($new_token);
-
-			print_r($new_token);
 
 			return $new_token;
 		}
@@ -267,10 +266,10 @@
 		 * type token is passed, the Authorization header of the request will
 		 * be set as needed.
 		 *
-		 * @param GoAuthHttpRequest $request
-		 * @param Bool				$use_token
+		 * @param GoAuth2HttpRequest 	$request
+		 * @param Bool					$use_token
 		 */
-		public function call(GOAuthHttpRequest $request, $use_token = true) {
+		public function call(GOAuth2HttpRequest $request, $use_token = true) {
 
 			if($use_token && !($token = $this->getActiveToken())) {
 				throw new GOAuth2NoActiveTokenException('no_active_token', 'A token-based request was made, but the client has no active tokens configured.');
@@ -298,10 +297,10 @@
 		 * Sign a request using the OAuth 2.0 MAC token specification.
 		 * Currently based on draft v2 of the specification.
 		 *
-		 * @param GOAuthHttpRequest 	$request
+		 * @param GOAuth2HttpRequest 	$request
 		 * @param GOAuth2AccessToken	$token
 		 */
-		public function addMACTokenToRequest(GOAuthHttpRequest $request, GOAuth2AccessToken $token, $hmac_algorithm = GoAuth2::HMAC_SHA1) {
+		public function addMACTokenToRequest(GOAuth2HttpRequest $request, GOAuth2AccessToken $token, $hmac_algorithm = GoAuth2::HMAC_SHA1) {
 
 			// Generate timestamp and nonce and add to params
 			$timestamp 	= time();
@@ -332,11 +331,11 @@
 		/**
 		 * Add a simple Bearer access token to the request.
 		 *
-		 * @param 	GOAuthHttpRequest $request
+		 * @param 	GOAuth2HttpRequest $request
 		 * @param 	GOAuth2AccessToken $token
-		 * @return	GOAuthHttpRequest
+		 * @return	GOAuth2HttpRequest
 		 */
-		private function addBearerTokenToRequest(GOAuthHttpRequest $request, GOAuth2AccessToken $token) {
+		private function addBearerTokenToRequest(GOAuth2HttpRequest $request, GOAuth2AccessToken $token) {
 			$request->authorization_header = "BEARER {$token->access_token}";
 			return $request;
 		}
@@ -344,11 +343,11 @@
 		/**
 		 * Make a HTTP request.
 		 *
-		 * @param	GOAuthHttpRequest	$request
+		 * @param	GOAuth2HttpRequest	$request
 		 * @throws 	GOAuth2Exception
-		 * @return	GOAuthHttpResponse
+		 * @return	Response text.
 		 */
-		public function sendRequest(GOAuthHttpRequest $request) {
+		public function sendRequest(GOAuth2HttpRequest $request) {
 
 			// Set the request headers
 			$headers = array();
@@ -381,11 +380,6 @@
 
 			// Close the cURL handler.
 			curl_close($ch);
-
-			// If the request was expecting a JSON response, be nice and decode.
-			if($request->expect_json) {
-				return json_decode($curl_response);
-			}
 
 			// Return the response.
 			return $curl_response;
