@@ -174,8 +174,27 @@
 					return;
 
 				case GOAuth2::SERVER_AUTH_TYPE_HTTP_BASIC:
-					// @todo: Implement BASIC authentication support.
-					$this->sendErrorResponse(GOAuth2::ERROR_INVALID_CLIENT);
+
+					// Extracted the base64-encoded string from the header.
+					if(!preg_match('/^Authorization:\s+Basic\s+(\w+==)$/', $authorization_header, $matches)) {
+						$this->sendErrorResponse(GoAuth2::ERROR_INVALID_CLIENT);
+					}
+
+					// Decode the authorization information and check that it's in u:p form
+					try {
+						list($_, $authorization_string) = $matches;
+						list($username, $password) = explode(':', base64_decode($authorization_string));
+					} catch(Exception $e) {
+						$this->sendErrorResponse(GoAuth2::ERROR_INVALID_CLIENT);
+					}
+
+					// Authenticate the HTTP BASIC credentials.
+					// NB: Currently we assume that the credentials being passed in the BASIC header
+					// are the client_id and client_secret.
+					// @todo: Generalise this.
+					$this->authenticateClientCredentials($username, $password);
+
+					// Authentication was successful.
 					return;
 
 				case GOAuth2::SERVER_AUTH_TYPE_CREDENTIALS:
@@ -329,7 +348,7 @@
 
 
 		/**
-		 * FUNCTIONS THAT MAY BE OPTIONALLY REIMPLEMENTED
+		 * FUNCTIONS THAT MUST BE REIMPLEMENTED IN SOME SCENARIOS
 		 *
 		 * The following functions MUST be reimplemented in any inheriting subclass
 		 * IF the inheriting Token Server needs to support the relevant feature.

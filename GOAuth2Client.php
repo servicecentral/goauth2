@@ -20,6 +20,10 @@
 		// The URI of the service provider's token endpoint.
 		protected $token_uri;
 
+		// The Authentication method the token endpoint uses (usually client
+		// id / secret but could be something else).
+		protected $token_auth_method;
+
 		// A token 'cache' to store any tokens we receive
 		private $tokens;
 		private $active_token;
@@ -30,15 +34,17 @@
 		 * @param 	String		$client_secret
 		 * @param	String		$authorization_uri
 		 * @param	String		$token_uri
+		 * @param	String		$token_auth_method
 		 * @param	array		$tokens				Optional. An array of GOAuth2AccessToken objects
 		 * 											that may be used by the client.
 		 * @return	GOAuth2Client
 		 */
-		public function __construct($client_id, $client_secret, $authorization_uri, $token_uri, $tokens = array()) {
+		public function __construct($client_id, $client_secret, $authorization_uri, $token_uri, $token_auth_method = GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $tokens = array()) {
 			$this->client_id 			= $client_id;
 			$this->client_secret 		= $client_secret;
 			$this->authorization_uri	= $authorization_uri;
 			$this->token_uri			= $token_uri;
+			$this->token_auth_method	= $token_auth_method;
 
 			// If any tokens were supplied, add them to our internal 'cache'
 			if(!empty($tokens)) {
@@ -111,8 +117,6 @@
 		public function getTokenByResourceOwnerCredentials($username, $password, $scope = null) {
 			$params = array(
 				'grant_type' 	=> GOAuth2::GRANT_TYPE_PASSWORD,
-				'client_id'	 	=> $this->client_id,
-				'client_secret'	=> $this->client_secret,
 				'username'		=> $username,
 				'password'		=> $password
 			);
@@ -122,7 +126,7 @@
 				$params['scope'] = $scope;
 			}
 
-			// Construct and make the token request.
+			// Construct the token request.
 			$token_request = new GOAuth2HttpRequest($this->token_uri, 'POST', $params);
 
 			// Make the token request.
@@ -151,7 +155,7 @@
 				$params['scope'] = $scope;
 			}
 
-			// Construct and make the token request.
+			// Construct the token request.
 			$token_request = new GOAuth2HttpRequest($this->token_uri, 'POST', $params);
 
 			// Make the token request.
@@ -171,9 +175,7 @@
 			// Set parameters required for the refresh request.
 			$params = array(
 				'grant_type'	=> GOAuth2::GRANT_TYPE_REFRESH_TOKEN,
-				'refresh_token'	=> $token->refresh_token,
-				'client_id'		=> $this->client_id,
-				'client_secret'	=> $this->client_secret
+				'refresh_token'	=> $token->refresh_token
 			);
 
 			// Add the scope parameter if non-empty.
@@ -197,6 +199,28 @@
 		 * @return	GOAuth2AccessToken
 		 */
 		private function makeTokenRequest(GOAuth2HttpRequest $request) {
+
+			// Add authentication parameters as required.
+			switch($this->token_auth_method) {
+				case GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS:
+					// Client credentials (the default authentication method).
+					// Add the client ID and client secret to the request.
+					$request->params['client_id'] 		= $this->client_id;
+					$requent->params['client_secret'] 	= $this->client_secret;
+					break;
+
+				case GoAuth2::SERVER_AUTH_TYPE_HTTP_BASIC:
+					// HTTP BASIC authentication (not really recommended).
+					// Add the BASIC auth details to the Auth header.
+					$authorization_string			= base64_encode("{$this->client_id}:{$this->client_secret}");
+					$request->authorization_header 	= "Authorization: Basic $authorization_string";
+					break;
+
+				case GoAuth2::SERVER_AUTH_TYPE_ANONYMOUS:
+				default:
+					// Do nothing for anonymous or unknown auth type.
+					break;
+			}
 
 			// Make the request and get the JSON response.
 			$json_response 	= $this->sendRequest($request);

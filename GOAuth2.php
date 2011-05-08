@@ -7,9 +7,9 @@
 	 */
 	class GOAuth2 {
 
-		const SERVER_AUTH_TYPE_CREDENTIALS	= 0;
-		const SERVER_AUTH_TYPE_HTTP_BASIC	= 1;
-		const SERVER_AUTH_TYPE_ANONYMOUS	= 2;
+		const SERVER_AUTH_TYPE_CREDENTIALS	= 'credentials';
+		const SERVER_AUTH_TYPE_HTTP_BASIC	= 'basic';
+		const SERVER_AUTH_TYPE_ANONYMOUS	= 'anonymous';
 
 		const RESPONSE_TYPE_TOKEN 			= 'token';
 		const RESPONSE_TYPE_CODE			= 'code';
@@ -117,15 +117,16 @@
 			$parsed_uri['scheme']	= isset($parsed_uri['scheme']) ? strtolower($parsed_uri['scheme']) : 'http';
 			$parsed_uri['port']		= isset($parsed_uri['port']) ? $parsed_uri['port'] : (($parsed_uri['scheme'] == 'https') ? 443 : 80);
 
-			$request_parts 			= array();
-			$request_parts[] 		= $access_token;					// The access token used for the request.
-			$request_parts[] 		= $timestamp;						// The timestamp for the request.
-			$request_parts[] 		= $nonce;							// The unique 'number used once' for the request.
-			$request_parts[] 		= ''; 								// The 'body hash' parameter (not currently used).
-			$request_parts[] 		= strtoupper($http_method);			// The HTTP metod (eg 'POST' or 'GET')
-			$request_parts[]		= strtolower($parsed_uri['host']);	// The URI hostname (eg example.com)
-			$request_parts[]		= $parsed_uri['port'];				// The port of the request (eg 80)
-			$request_parts[]		= $parsed_uri['path'];				// The path of the request (eg '/api/v1')
+			$request_parts 			= array(
+				$access_token,						// The access token used for the request.
+				$timestamp,							// The timestamp for the request.
+				$nonce,								// The unique 'number used once' for the request.
+				'',									// The body hash for the request. Currently not used.
+				strtoupper($http_method),			// The HTTP metod (eg 'POST' or 'GET')
+				strtolower($parsed_uri['host']),	// The URI hostname (eg example.com)
+				$parsed_uri['port'],				// The port of the request (eg 80)
+				$parsed_uri['path'],				// The path of the request (eg '/api/v1')
+			);
 
 			// Normalize the query parameters
 			$query_parts			= isset($parsed_uri['query']) ? explode('&', urldecode($parsed_uri['query'])) : array();
