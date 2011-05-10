@@ -8,105 +8,105 @@
 	 */
 	class GOAuth2Client {
 
-		// Unique ID to identify the client to the service provider.
+		/** @var String Unique ID to identify the client to the service provider. */
 		protected $client_id;
 
-		// The private secret known only to the client and the service provider.
+		/** @var String The private secret known only to the client and the service provider. */
 		protected $client_secret;
 
-		// The URI of the service provider's authorization endpoint.
+		/** @var String The URI of the service provider's authorization endpoint. */
 		protected $authorization_uri;
 
-		// The URI of the service provider's token endpoint.
+		/** @var String The URI to redirect the user back to after authorization. */
+		protected $redirect_uri;
+
+		/** @var String The URI of the service provider's token endpoint. */
 		protected $token_uri;
 
-		// The Authentication method the token endpoint uses (usually client
-		// id / secret but could be something else).
+		/** @var String The authentication method the token endpoint uses. */
 		protected $token_auth_method;
 
-		// A token 'cache' to store any tokens we receive
-		private $tokens;
-		private $active_token;
+		/** @var GOAuth2AccessToken	An access token used for requests. */
+		private $token;
+
 
 		/**
 		 * Class constructor.
-		 * @param 	String		$client_id
-		 * @param 	String		$client_secret
-		 * @param	String		$authorization_uri
-		 * @param	String		$token_uri
-		 * @param	String		$token_auth_method
-		 * @param	array		$tokens				Optional. An array of GOAuth2AccessToken objects
-		 * 											that may be used by the client.
+		 * @param 	String				$client_id			The client ID (aka API Key)
+		 * @param 	String				$client_secret		The client secret (aka API secret)
+		 * @param	String				$authorization_uri	The URI of the OAuth2.0 server's authorization endpoint.
+		 * @param	String				$token_uri			The URI of the OAuth2.0 server's token endpoint.
+		 * @param	String				$redirect_uri		Optional. The URI that should receive authorization grants.
+		 * @param	String				$token_auth_method	Optional. The authentication method the token server uses.
+		 * @param	GoAuth2AccessToken	$token				Optional. An already-obtained access token to make requests with.
 		 * @return	GOAuth2Client
 		 */
-		public function __construct($client_id, $client_secret, $authorization_uri, $token_uri, $token_auth_method = GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $tokens = array()) {
+		public function __construct($client_id, $client_secret, $authorization_uri, $token_uri, $redirect_uri = null, $token_auth_method = GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $token = null) {
 			$this->client_id 			= $client_id;
 			$this->client_secret 		= $client_secret;
 			$this->authorization_uri	= $authorization_uri;
 			$this->token_uri			= $token_uri;
+			$this->redirect_uri			= $redirect_uri;
 			$this->token_auth_method	= $token_auth_method;
-
-			// If any tokens were supplied, add them to our internal 'cache'
-			if(!empty($tokens)) {
-				foreach($tokens as /** @var GOAuth2AccessToken */ $token) {
-					$this->tokens[$token->access_token] = $token;
-
-					if(!$this->getActiveToken()) {
-						$this->setActiveToken($token->access_token);
-					}
-				}
-			}
+			$this->token				= $token;
 		}
 
 
 		/**
-		 * Add a new token to the internal token cache and set it as the
-		 * new active token.
+		 * Set the token object to be used to make calls to the API endpoint.
+		 * Pass NULL as the $token argument to clear the token.
 		 *
-		 * @param GOAuth2AccessToken 	$token
-		 * @param Bool					$set_active
+		 * @param GoAuth2AccesToken $token
 		 */
-		public function addToken(GOAuth2AccessToken $token, $set_active = true) {
-			$this->tokens[$token->access_token] = $token;
-			if($set_active) {
-				$this->setActiveToken($token->access_token);
-			}
+		public function setToken(GOAuth2AccessToken $token) {
+			$this->token = $token;
 		}
 
 
 		/**
-		 * Set the 'active' token to that with the specified access token string.
-		 * If an invalid token is specified, False is returned. Otherwise, the
-		 * token object is returned.
+		 * Get the current access token being used by the client, or null if
+		 * none is set.
 		 *
-		 * @param 	String 	$access_token	The access token's string.
-		 * @return	GOAuth2AccessToken		Token object on success, null otherwise.
+		 * @return GOAuth2AccessToken
 		 */
-		public function setActiveToken($access_token) {
-			if(!isset($this->tokens[$access_token])) {
-				return null;
-			}
-
-			$this->active_token = $access_token;
-			return $this->getActiveToken();
+		public function getToken() {
+			return $this->token;
 		}
 
 
 		/**
-		 * Get the currently active token object, or null if no active token
-		 * exists.
-		 * @return	GOAuth2AccessToken	Active Token object or null if none active.
+		 * Generate a URI for an authorization request.
+		 *
+		 * @param 	String $scope		Optional. A space-delimited list of requested scopes.
+		 * @param 	String $state		Optional. A value that can be used to maintain state
+		 * 								between the authorization request and the callback.
+		 * @return	String				A URI.
 		 */
-		public function getActiveToken() {
-			if(!$this->active_token || !isset($this->tokens[$this->active_token])) {
-				return null;
-			}
-			return $this->tokens[$this->active_token];
+		public function getAuthorizationRequestURI($scope = null, $state = null) {
+
+			// Configure required parameters
+			$params = array(
+				'response_type' => GOAuth2::RESPONSE_TYPE_CODE,
+				'client_id'		=> $this->client_id
+			);
+
+			// Add optional parameters
+			if($this->redirect_uri) { $params['redirect_uri'] = $this->redirect_uri; }
+			if($scope) 				{ $params['scope'] = $scope; }
+			if($state) 				{ $params['state'] = $state; }
+
+			// Construct and return the URI
+			$params = http_build_query($params);
+			return $this->authorization_uri . '?' . $params;
 		}
 
 
 		/**
 		 * Get a token using the credentials of the resource owner directly.
+		 *
+		 * Note that any API calls made after this function has successfully
+		 * returned a token will *not* automatically use the returned token -
+		 * you should call setToken() to do this.
 		 *
 		 * @param String	$username	The resource owner's username.
 		 * @param String	$password	The resource owner's password.
@@ -137,6 +137,10 @@
 		/**
 		 * Get a token using client credentials only.
 		 *
+		 * Note that any API calls made after this function has successfully
+		 * returned a token will *not* automatically use the returned token -
+		 * you should call setToken() to do this.
+		 *
 		 * @param	String	$scope	Optional. A space-delimited list describing the
 		 * 							scope of the token request.
 		 * @return	GoAuth2AccessToken
@@ -164,11 +168,44 @@
 
 
 		/**
+		 * Get a token using a previously obtained authorization code.
+		 *
+		 * Note that any API calls made after this function has successfully
+		 * returned a token will *not* automatically use the returned token -
+		 * you should call setToken() to do this.
+		 *
+		 * @param 	String 	$authorization_code
+		 * @return	GOAuth2AccessToken
+		 */
+		public function getTokenByAuthorizationCode(GoAuth2AuthorizationCode $code) {
+
+			// Set parameters required for the token request.
+			$params = array(
+				'grant_type'	=> GoAuth2::GRANT_TYPE_CODE,
+				'code'			=> $code->code,
+				'redirect_uri'	=> $code->redirect_uri
+			);
+
+			// Construct the token request.
+			$token_request = new GOAuth2HttpRequest($this->token_uri, 'POST', $params);
+
+			// Make the token request.
+			return $this->makeTokenRequest($token_request);
+		}
+
+
+		/**
 		 * Refresh a held access token.
+		 *
+		 * Note that any API calls made after this function has successfully
+		 * returned a token will *not* automatically use the returned token -
+		 * you should call setToken() to do this.
 		 *
 		 * @param GOAuth2AccessToken	$token	The held token.
 		 * @param String				$scope	Optional. A space-delimited list describing
 		 * 										the scope of the token request.
+		 *
+		 * @return	GOAuth2AccessToken
 		 */
 		public function refreshAccessToken(GOAuth2AccessToken $token, $scope = null) {
 
@@ -247,9 +284,6 @@
 				isset($response->algorithm) 	? $response->algorithm : null
 			);
 
-			// Add this token to our cache
-			$this->addToken($new_token);
-
 			return $new_token;
 		}
 
@@ -295,8 +329,8 @@
 		 */
 		public function call(GOAuth2HttpRequest $request, $use_token = true) {
 
-			if($use_token && !($token = $this->getActiveToken())) {
-				throw new GOAuth2NoActiveTokenException('no_active_token', 'A token-based request was made, but the client has no active tokens configured.');
+			if($use_token && !($token = $this->token)) {
+				throw new GOAuth2NoTokenException('no_token', 'A token-based request was made, but the client has no token configured.');
 			}
 
 			// If a token was specified, sign the request as appropriate.

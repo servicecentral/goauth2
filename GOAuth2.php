@@ -7,46 +7,50 @@
 	 */
 	class GOAuth2 {
 
-		const SERVER_AUTH_TYPE_CREDENTIALS	= 'credentials';
-		const SERVER_AUTH_TYPE_HTTP_BASIC	= 'basic';
-		const SERVER_AUTH_TYPE_ANONYMOUS	= 'anonymous';
+		const SERVER_AUTH_TYPE_CREDENTIALS		= 'credentials';
+		const SERVER_AUTH_TYPE_HTTP_BASIC		= 'basic';
+		const SERVER_AUTH_TYPE_ANONYMOUS		= 'anonymous';
 
-		const RESPONSE_TYPE_TOKEN 			= 'token';
-		const RESPONSE_TYPE_CODE			= 'code';
+		const RESPONSE_TYPE_TOKEN 				= 'token';
+		const RESPONSE_TYPE_CODE				= 'code';
 
-		const GRANT_TYPE_CODE 				= 'authorization_code';
-		const GRANT_TYPE_CLIENT_CREDENTIALS	= 'client_credentials';
-		const GRANT_TYPE_PASSWORD 			= 'password';
-		const GRANT_TYPE_REFRESH_TOKEN		= 'refresh_token';
+		const GRANT_TYPE_CODE 					= 'authorization_code';
+		const GRANT_TYPE_CLIENT_CREDENTIALS		= 'client_credentials';
+		const GRANT_TYPE_PASSWORD 				= 'password';
+		const GRANT_TYPE_REFRESH_TOKEN			= 'refresh_token';
 
-		const ERROR_INVALID_REQUEST			= 'invalid_request';
-		const ERROR_INVALID_CLIENT			= 'invalid_client';
-		const ERROR_INVALID_GRANT			= 'invalid_grant';
-		const ERROR_UNAUTHORIZED_CLIENT		= 'unauthorized_client';
-		const ERROR_UNSUPPORTED_GRANT_TYPE	= 'unsupported_grant_type';
-		const ERROR_INVALID_SCOPE			= 'invalid_scope';
+		const ERROR_INVALID_REQUEST				= 'invalid_request';
+		const ERROR_INVALID_CLIENT				= 'invalid_client';
+		const ERROR_INVALID_GRANT				= 'invalid_grant';
+		const ERROR_UNAUTHORIZED_CLIENT			= 'unauthorized_client';
+		const ERROR_UNSUPPORTED_GRANT_TYPE		= 'unsupported_grant_type';
+		const ERROR_INVALID_SCOPE				= 'invalid_scope';
+		const ERROR_ACCESS_DENIED				= 'access_denied';
+		const ERROR_UNSUPPORTED_RESPONSE_TYPE 	= 'unsupported_response_type';
 
 		// These errors are NOT defined by the OAuth2.0 protocol
-		const ERROR_INTERNAL_ERROR			= 'internal_error';
+		const ERROR_INTERNAL_ERROR				= 'internal_error';
+		const ERROR_INVALID_REDIRECT_URI		= 'invalid_redirect_uri';
 
-		const TOKEN_TYPE_BEARER				= 'bearer';
-		const TOKEN_TYPE_MAC				= 'mac';
+		const TOKEN_TYPE_BEARER					= 'bearer';
+		const TOKEN_TYPE_MAC					= 'mac';
 
-		const HMAC_SHA1						= 'hmac-sha-1';
-		const HMAC_SHA256					= 'hmac-sha-256';
+		const HMAC_SHA1							= 'hmac-sha-1';
+		const HMAC_SHA256						= 'hmac-sha-256';
 
-		const HTTP_200 						= 'HTTP/1.1 200 OK';
-		const HTTP_301 						= 'HTTP/1.1 301 Moved Permanantly';
-		const HTTP_400 						= 'HTTP/1.1 400 Bad Request';
-		const HTTP_401 						= 'HTTP/1.1 401 Unauthorized';
-		const HTTP_403 						= 'HTTP/1.1 403 Forbidden';
-		const HTTP_404 						= 'HTTP/1.1 404 File Not Found';
-		const HTTP_410 						= 'HTTP/1.1 410 Gone';
-		const HTTP_500 						= 'HTTP/1.1 500 Internal Server Error';
-		const HTTP_503 						= 'HTTP/1.1 503 Service Unavailable';
+		const HTTP_200 							= 'HTTP/1.1 200 OK';
+		const HTTP_301 							= 'HTTP/1.1 301 Moved Permanantly';
+		const HTTP_302							= 'HTTP/1.1 302 Found';
+		const HTTP_400 							= 'HTTP/1.1 400 Bad Request';
+		const HTTP_401 							= 'HTTP/1.1 401 Unauthorized';
+		const HTTP_403 							= 'HTTP/1.1 403 Forbidden';
+		const HTTP_404 							= 'HTTP/1.1 404 File Not Found';
+		const HTTP_410 							= 'HTTP/1.1 410 Gone';
+		const HTTP_500 							= 'HTTP/1.1 500 Internal Server Error';
+		const HTTP_503 							= 'HTTP/1.1 503 Service Unavailable';
 
-		const CONTENT_TYPE_JSON 			= 'application/json';
-		const CONTENT_TYPE_XML 				= 'text/xml';
+		const CONTENT_TYPE_JSON 				= 'application/json';
+		const CONTENT_TYPE_XML 					= 'text/xml';
 
 
 		/**
@@ -63,13 +67,15 @@
 		}
 
 		private static $error_descriptions = array(
-			self::ERROR_INVALID_REQUEST 		=> 'The request is missing a required parameter or is otherwise malformed.',
-			self::ERROR_INVALID_CLIENT 			=> 'Client authentication failed.',
-			self::ERROR_INVALID_GRANT 			=> 'The provided authorization grant is invalid, expired or revoked.',
-			self::ERROR_UNAUTHORIZED_CLIENT 	=> 'The authenticated client is not authorized to use the specified grant type.',
-			self::ERROR_UNSUPPORTED_GRANT_TYPE 	=> 'The authorization grant type is not supported by this server.',
-			self::ERROR_INVALID_SCOPE 			=> 'The requested scope is unknown, invalid, malformed or exceed the permissible scope.',
-			self::ERROR_INTERNAL_ERROR 			=> 'An internal server error occured while processing the request.'
+			self::ERROR_INVALID_REQUEST 			=> 'The request is missing a required parameter or is otherwise malformed.',
+			self::ERROR_INVALID_CLIENT 				=> 'Client authentication failed.',
+			self::ERROR_INVALID_GRANT 				=> 'The provided authorization grant is invalid, expired or revoked.',
+			self::ERROR_UNAUTHORIZED_CLIENT 		=> 'The authenticated client is not authorized to use the specified grant type.',
+			self::ERROR_UNSUPPORTED_GRANT_TYPE 		=> 'The authorization grant type is not supported by this server.',
+			self::ERROR_INVALID_SCOPE 				=> 'The requested scope is unknown, invalid, malformed or exceed the permissible scope.',
+			self::ERROR_ACCESS_DENIED 				=> 'The resource owner or authorization server denied the request.',
+			self::ERROR_UNSUPPORTED_RESPONSE_TYPE 	=> 'The authorization server does not support obtaining an authorization code using this method.',
+			self::ERROR_INTERNAL_ERROR 				=> 'An internal server error occured while processing the request.'
 		);
 
 
@@ -87,13 +93,15 @@
 		}
 
 		private static $error_http_codes = array(
-			self::ERROR_INVALID_REQUEST 		=> self::HTTP_400, // Bad Request
-			self::ERROR_INVALID_CLIENT 			=> self::HTTP_401, // Unauthorized
-			self::ERROR_INVALID_GRANT 			=> self::HTTP_401, // Unauthorized
-			self::ERROR_UNAUTHORIZED_CLIENT 	=> self::HTTP_403, // Forbidden
-			self::ERROR_UNSUPPORTED_GRANT_TYPE 	=> self::HTTP_400, // Bad Request
-			self::ERROR_INVALID_SCOPE 			=> self::HTTP_400, // Bad Request
-			self::ERROR_INTERNAL_ERROR 			=> self::HTTP_500  // Internal Server Error
+			self::ERROR_INVALID_REQUEST 			=> self::HTTP_400, // Bad Request
+			self::ERROR_INVALID_CLIENT 				=> self::HTTP_401, // Unauthorized
+			self::ERROR_INVALID_GRANT 				=> self::HTTP_401, // Unauthorized
+			self::ERROR_UNAUTHORIZED_CLIENT 		=> self::HTTP_403, // Forbidden
+			self::ERROR_UNSUPPORTED_GRANT_TYPE 		=> self::HTTP_400, // Bad Request
+			self::ERROR_INVALID_SCOPE 				=> self::HTTP_400, // Bad Request
+			self::ERROR_ACCESS_DENIED 				=> self::HTTP_401, // Unauthorized
+			self::ERROR_UNSUPPORTED_RESPONSE_TYPE 	=> self::HTTP_400, // Bad Request
+			self::ERROR_INTERNAL_ERROR 				=> self::HTTP_500  // Internal Server Error
 		);
 
 
@@ -239,6 +247,24 @@
 	}
 
 
+	class GoAuth2AuthorizationCode {
+		public $code;
+		public $redirect_uri;
+
+		public function __construct($code, $redirect_uri) {
+			$this->code = $code;
+			$this->redirect_uri = $redirect_uri;
+		}
+
+		public function toJSON() {
+			return json_encode(array(
+				'code' 			=> $this->code,
+				'redirect_uri'	=> $this->redirect_uri
+			));
+		}
+	}
+
+
 	/**
 	 * A HTTP Request.
 	 * @package	GOAuth2
@@ -280,8 +306,8 @@
 	// Thrown when the response from the server is invalid.
 	class GOAuth2InvalidResponseException 		extends GOAuth2Exception {}
 
-	// Thrown when a call attempt is made without an active token
-	class GOAuth2NoActiveTokenException 		extends GOAuth2Exception {}
+	// Thrown when a call attempt is made without a token.
+	class GOAuth2NoTokenException 				extends GOAuth2Exception {}
 
 	/* The following Exception types mirror the errors that may be returned
 	 * by an OAuth2.0 Token Server as defined s5.2 of the specification. */
@@ -291,3 +317,4 @@
 	class GOAuth2UnauthorizedClientException 	extends  GOAuth2Exception {}
 	class GOAuth2UnsupportedGrantTypeException 	extends  GOAuth2Exception {}
 	class GOAuth2InvalidScopeException 			extends  GOAuth2Exception {}
+	class GOAuth2InvalidRedirectURIException 	extends  GOAuth2Exception {}

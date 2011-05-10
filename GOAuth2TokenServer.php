@@ -41,6 +41,9 @@
 
 			// Handle the token request depending on its type.
 			switch($post['grant_type']) {
+				case GOAuth2::GRANT_TYPE_CODE:
+					$this->handleTokenRequestWithAuthorizationCode($post, $authorization_header);
+					break;
 				case GOAuth2::GRANT_TYPE_CLIENT_CREDENTIALS:
 					$this->handleTokenRequestWithClientCredentials($post, $authorization_header);
 					break;
@@ -53,6 +56,39 @@
 				default:
 					$this->sendErrorResponse(GOAuth2::ERROR_INVALID_REQUEST);
 			}
+
+		}
+
+
+		/**
+		 * Handle a request for an access token using a previously obtained
+		 * authorization code. This is the flow used when a client would like
+		 * to obtain access on behalf of an end-user.
+		 *
+		 * @param array		$post					The POST array given with the request.
+		 * @param String	$authorization_header	The contents of the Authorization: header.
+		 */
+		private function handleTokenRequestWithAuthorizationCode($post, $authorization_header) {
+
+			// Get the authorization code and redirect URI from the POST
+			$client_id 		= isset($post['client_id']) ? $post['client_id'] : null;
+			$client_secret 	= isset($post['client_secret']) ? $post['client_secret'] : null;
+			$code 			= isset($post['code']) ? $post['code'] : null;
+			$redirect_uri 	= isset($post['redirect_uri']) ? $post['redirect_uri'] : null;
+
+			// Authenticate the client request
+			$this->authenticateClientRequest($client_id, $client_secret, $authorization_header);
+
+			// Check that a code and redirect_uri was passed
+			if(empty($code) || empty($redirect_uri)) {
+				$this->sendErrorResponse(GoAuth2::ERROR_INVALID_REQUEST);
+			}
+
+			// Validate the authorization code information
+			// @todo: There are issues here if not using the credentials means of authorization.
+			$this->validateAuthorizationCode($client_id, $code, $redirect_uri);
+
+			$token = $this->generateAccessToken($client_id);
 
 		}
 
@@ -355,6 +391,21 @@
 		 */
 
 		/**
+		 * Generate and store an access token from the given authorization
+		 * code. This function must only be called after the code has been
+		 * validated.
+		 *
+		 * This function MUST be reimplemented if the server utilises the
+		 * authorization code flow.
+		 *
+		 * @param 	String $code	The authorization code.
+		 * @return	GOAuth2AccessToken
+		 */
+		protected function generateAccessTokenFromAuthorizationCode($code) {
+			throw new Exception('generateAccessTokenFromAuthorizationCode() not implemented by server.');
+		}
+
+		/**
 		 * Authenticate the given client credentials.  This function must be
 		 * reimplemented in the inheriting server subclass if that server
 		 * utilises the client credentials authentication method. The function
@@ -388,5 +439,26 @@
 		 */
 		protected function validateResourceOwnerCredentials($username, $password) {
 			throw new Exception('validateResourceOwnerCredentials() not implemented by server.');
+		}
+
+		/**
+		 * Validate the given authorization code details. This function must
+		 * be reimplemented in the inheriting subclass if the server needs to
+		 * support the authorization code flow of access token grant.
+		 *
+		 * @param	String	$client_id		The ID of the client requesting the
+		 * 									token. This MUST be checked against
+		 * 									the ID of the client that was given
+		 * 									the authorization code by the
+		 * 									authorization server.
+		 * @param	String	$code			The authorization code.
+		 * @param	String	$redirect_uri	The redirect URI the client claims it
+		 * 									obtained during the authorization
+		 * 									process. This MUST be checked against
+		 * 									the redirect URI logged by the
+		 * 									authorization server.
+		 */
+		protected function validateAuthorizationCode($client_id, $code, $redirect_uri) {
+			throw new Exception('validateAuthorizationCode() not implemented by server.');
 		}
 	}
