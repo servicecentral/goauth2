@@ -247,7 +247,7 @@
 	}
 
 
-	class GoAuth2AuthorizationCode {
+	class GOAuth2AuthorizationCode {
 		public $code;
 		public $redirect_uri;
 

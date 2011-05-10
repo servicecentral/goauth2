@@ -38,10 +38,10 @@
 		 * @param	String				$token_uri			The URI of the OAuth2.0 server's token endpoint.
 		 * @param	String				$redirect_uri		Optional. The URI that should receive authorization grants.
 		 * @param	String				$token_auth_method	Optional. The authentication method the token server uses.
-		 * @param	GoAuth2AccessToken	$token				Optional. An already-obtained access token to make requests with.
+		 * @param	GOAuth2AccessToken	$token				Optional. An already-obtained access token to make requests with.
 		 * @return	GOAuth2Client
 		 */
-		public function __construct($client_id, $client_secret, $authorization_uri, $token_uri, $redirect_uri = null, $token_auth_method = GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $token = null) {
+		public function __construct($client_id, $client_secret, $authorization_uri, $token_uri, $redirect_uri = null, $token_auth_method = GOAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $token = null) {
 			$this->client_id 			= $client_id;
 			$this->client_secret 		= $client_secret;
 			$this->authorization_uri	= $authorization_uri;
@@ -56,7 +56,7 @@
 		 * Set the token object to be used to make calls to the API endpoint.
 		 * Pass NULL as the $token argument to clear the token.
 		 *
-		 * @param GoAuth2AccesToken $token
+		 * @param GOAuth2AccesToken $token
 		 */
 		public function setToken(GOAuth2AccessToken $token) {
 			$this->token = $token;
@@ -84,11 +84,13 @@
 		 */
 		public function getAuthorizationRequestURI($scope = null, $state = null) {
 
+			// Get any query parameters already in the authorization URI
+			$uri_parts 		= parse_url($this->authorization_uri);
+			parse_str($uri_parts['query'], $params);
+
 			// Configure required parameters
-			$params = array(
-				'response_type' => GOAuth2::RESPONSE_TYPE_CODE,
-				'client_id'		=> $this->client_id
-			);
+			$params['response_type'] 	= GOAuth2::RESPONSE_TYPE_CODE;
+			$params['client_id'] 		= $this->client_id;
 
 			// Add optional parameters
 			if($this->redirect_uri) { $params['redirect_uri'] = $this->redirect_uri; }
@@ -97,7 +99,13 @@
 
 			// Construct and return the URI
 			$params = http_build_query($params);
-			return $this->authorization_uri . '?' . $params;
+			$uri_parts = array(
+				$uri_parts['scheme'] ? $uri_parts['scheme'] . '://' : '',
+				$uri_parts['host'],
+				$uri_parts['path'],
+				empty($params) ? '' : "?$params"
+			);
+			return implode('', $uri_parts);
 		}
 
 
@@ -143,7 +151,7 @@
 		 *
 		 * @param	String	$scope	Optional. A space-delimited list describing the
 		 * 							scope of the token request.
-		 * @return	GoAuth2AccessToken
+		 * @return	GOAuth2AccessToken
 		 */
 		public function getTokenByClientCredentials($scope = null) {
 
@@ -177,11 +185,11 @@
 		 * @param 	String 	$authorization_code
 		 * @return	GOAuth2AccessToken
 		 */
-		public function getTokenByAuthorizationCode(GoAuth2AuthorizationCode $code) {
+		public function getTokenByAuthorizationCode(GOAuth2AuthorizationCode $code) {
 
 			// Set parameters required for the token request.
 			$params = array(
-				'grant_type'	=> GoAuth2::GRANT_TYPE_CODE,
+				'grant_type'	=> GOAuth2::GRANT_TYPE_CODE,
 				'code'			=> $code->code,
 				'redirect_uri'	=> $code->redirect_uri
 			);
@@ -239,21 +247,21 @@
 
 			// Add authentication parameters as required.
 			switch($this->token_auth_method) {
-				case GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS:
+				case GOAuth2::SERVER_AUTH_TYPE_CREDENTIALS:
 					// Client credentials (the default authentication method).
 					// Add the client ID and client secret to the request.
 					$request->params['client_id'] 		= $this->client_id;
-					$requent->params['client_secret'] 	= $this->client_secret;
+					$request->params['client_secret'] 	= $this->client_secret;
 					break;
 
-				case GoAuth2::SERVER_AUTH_TYPE_HTTP_BASIC:
+				case GOAuth2::SERVER_AUTH_TYPE_HTTP_BASIC:
 					// HTTP BASIC authentication (not really recommended).
 					// Add the BASIC auth details to the Auth header.
 					$authorization_string			= base64_encode("{$this->client_id}:{$this->client_secret}");
 					$request->authorization_header 	= "Authorization: Basic $authorization_string";
 					break;
 
-				case GoAuth2::SERVER_AUTH_TYPE_ANONYMOUS:
+				case GOAuth2::SERVER_AUTH_TYPE_ANONYMOUS:
 				default:
 					// Do nothing for anonymous or unknown auth type.
 					break;
@@ -324,7 +332,7 @@
 		 * type token is passed, the Authorization header of the request will
 		 * be set as needed.
 		 *
-		 * @param GoAuth2HttpRequest 	$request
+		 * @param GOAuth2HttpRequest 	$request
 		 * @param Bool					$use_token
 		 */
 		public function call(GOAuth2HttpRequest $request, $use_token = true) {
@@ -358,7 +366,7 @@
 		 * @param GOAuth2HttpRequest 	$request
 		 * @param GOAuth2AccessToken	$token
 		 */
-		public function addMACTokenToRequest(GOAuth2HttpRequest $request, GOAuth2AccessToken $token, $hmac_algorithm = GoAuth2::HMAC_SHA1) {
+		public function addMACTokenToRequest(GOAuth2HttpRequest $request, GOAuth2AccessToken $token, $hmac_algorithm = GOAuth2::HMAC_SHA1) {
 
 			// Generate timestamp and nonce and add to params
 			$timestamp 	= time();

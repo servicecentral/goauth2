@@ -69,7 +69,7 @@
 				$this->sendErrorRedirect($redirect_uri, GOAuth2::ERROR_UNSUPPORTED_RESPONSE_TYPE, $state);
 			}
 
-			// Check that the scope requested is valid for the specified client
+			// Check that the scope requested is valid for users of the specified client
 			if(!$this->validateScope($client_id, $scope)) {
 				$this->sendErrorRedirect($redirect_uri, GOAuth2::ERROR_INVALID_SCOPE);
 			}
@@ -185,12 +185,20 @@
 		 */
 		private function sendRedirect($redirect_uri, $params = array()) {
 
-			// @todo: implement this.
 			// Extract any existing parameters from the redirect URI.
-			// parse_str(parse_url($uri, PHP_URL_QUERY), $current_params);
+			$uri_parts = parse_url($redirect_uri);
+			parse_str($uri_parts['query'], $existing_params);
+			$params = array_merge($params, $existing_params);
 
-			// Build the querystring from the parameters given.
-			$qs = http_build_query($params);
+			// Rebuild the URI with all query parameters
+			$params = http_build_query($params);
+			$uri_parts = array(
+				$uri_parts['scheme'] ? $uri_parts['scheme'] . '://' : '',
+				$uri_parts['host'],
+				$uri_parts['path'],
+				empty($params) ? '' : "?$params"
+			);
+			$redirect_uri = implode('', $uri_parts);
 
 			// Clean the output buffer to eliminate any whitespace.
 			@ob_end_clean();
@@ -199,7 +207,7 @@
 			header(GOAuth2::HTTP_302);
 
 			// Set the URI
-			header("Location: $redirect_uri?$qs");
+			header("Location: $redirect_uri");
 
 			// Cease processing
 			exit;
@@ -235,7 +243,7 @@
 		 * 									the server implementation (eg a user ID).
 		 * @param string 	$scope			The scope the authorization code should apply to.
 		 *
-		 * @return GoAuth2AuthorizationCode
+		 * @return GOAuth2AuthorizationCode
 		 */
 		protected function generateNewAuthorizationCode($client_id, $redirect_uri, $user, $scope) {
 			throw new Exception('GOAuth2AuthorizationServer::generateNewAuthorizationCode() not implemented.');
@@ -265,8 +273,7 @@
 		/**
 		 * Validate that the specified scope is validate for the given client.
 		 *
-		 * This function MUST be reimplemented if you want to check the requested scope at
-		 * the authorization stage.
+		 * This function MUST be reimplemented if you want to check the requested scope.
 		 *
 		 * @param 	string $client_id		The ID of the client making the request.
 		 * @param 	string $scope			The space-delimited list of requested scopes given in

@@ -17,14 +17,36 @@
 		// The algorithm used to generate HMAC signature.
 		protected $hmac_algorithm;
 
+		// Whether the token server supports refresh tokens.
+		protected $support_refresh;
+
 		// An array of URIs, indexed by error type, that may be provided to the client.
 		protected $error_uris 		= array();
 
-		public function __construct($token_type = GoAuth2::TOKEN_TYPE_MAC, $client_auth_method = GoAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $hmac_algorithm = GOAuth2::HMAC_SHA1) {
+
+		/**
+		 * Class constructor.
+		 *
+		 * @param String $token_type			The type of token this server distributes.
+		 * 										Defaults to MAC token type.
+		 * @param String $client_auth_method	The method that clients should use to authenticate
+		 *										themselves to the server. Defaults to client credentials,
+		 *										which requires client_id and client_secret to be passed
+		 *										with each request.
+		 * @param Bool	 $support_refresh		Whether the token server should support refresh tokens.
+		 * @param String $hmac_algorithm		The HMAC algorithm the server should use when calculating
+		 * 										comparison signature if the MAC token type is specified.
+		 * 										Defaults to SHA1.
+		 *
+		 * @return GOAuth2TokenServer
+		 */
+		public function __construct($token_type = GOAuth2::TOKEN_TYPE_MAC, $client_auth_method = GOAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $support_refresh = true, $hmac_algorithm = GOAuth2::HMAC_SHA1) {
 			$this->token_type			= $token_type;
 			$this->client_auth_method 	= $client_auth_method;
+			$this->support_refresh		= $support_refresh;
 			$this->hmac_algorithm		= $hmac_algorithm;
 		}
+
 
 		/**
 		 * Handle a request for a token to the token endpoint.
@@ -50,11 +72,15 @@
 				case GOAuth2::GRANT_TYPE_PASSWORD:
 					$this->handleTokenRequestWithPassword($post, $authorization_header);
 					break;
-				case GoAuth2::GRANT_TYPE_REFRESH_TOKEN:
-					$this->handleTokenRefreshRequest($post, $authorization_header);
-					break;
+				case GOAuth2::GRANT_TYPE_REFRESH_TOKEN:
+					// Only process if this server supports refresh tokens. Otherwise,
+					// the break is skipped and the unsupported grant type response is sent.
+					if($this->support_refresh) {
+						$this->handleTokenRefreshRequest($post, $authorization_header);
+						break;
+					}
 				default:
-					$this->sendErrorResponse(GOAuth2::ERROR_INVALID_REQUEST);
+					$this->sendErrorResponse(GOAuth2::ERROR_UNSUPPORTED_GRANT_TYPE);
 			}
 
 		}
@@ -81,15 +107,18 @@
 
 			// Check that a code and redirect_uri was passed
 			if(empty($code) || empty($redirect_uri)) {
-				$this->sendErrorResponse(GoAuth2::ERROR_INVALID_REQUEST);
+				$this->sendErrorResponse(GOAuth2::ERROR_INVALID_REQUEST);
 			}
 
+			// @todo: There are issues here if not using the client credentials means of authorization.
 			// Validate the authorization code information
-			// @todo: There are issues here if not using the credentials means of authorization.
 			$this->validateAuthorizationCode($client_id, $code, $redirect_uri);
 
-			$token = $this->generateAccessToken($client_id);
+			// Generate a token from the authorization code
+			$token = $this->generateAccessTokenFromAuthorizationCode($code);
 
+			// Send the generated token back to the client
+			$this->sendResponse(GOAuth2::HTTP_200, $token->toJSON(), GOAuth2::CONTENT_TYPE_JSON, $no_store = true);
 		}
 
 
@@ -112,9 +141,9 @@
 			$this->authenticateClientRequest($client_id, $client_secret, $authorization_header);
 
 			// Check that the scope requested is permissible
-			$this->checkTokenRequestScope($client_id, $for_user = null, $scope);
+			$this->checkTokenRequestScope($client_id, $user = null, $scope);
 
-			// Get a new access token
+			// Get a new access token for the client
 			$token = $this->generateAccessToken($client_id, $for_user = null, $scope);
 
 			// Send the generated token back to the client
@@ -143,14 +172,14 @@
 
 			// Check that a username and password was passed
 			if(empty($username) || empty($password)) {
-				$this->sendErrorResponse(GoAuth2::ERROR_INVALID_REQUEST);
+				$this->sendErrorResponse(GOAuth2::ERROR_INVALID_REQUEST);
 			}
 
 			// Validate the resource owner credentials
-			$this->validateResourceOwnerCredentials($username, $password);
+			$user = $this->validateResourceOwnerCredentials($username, $password);
 
 			// Check that the scope requested is permissible
-			$this->checkTokenRequestScope($client_id, $username, $scope);
+			$this->checkTokenRequestScope($client_id, $user, $scope);
 
 			// Get a new token
 			$token = $this->generateAccessToken($client_id, $username, $scope);
@@ -178,7 +207,7 @@
 
 			// Check that a refresh token was passed
 			if(empty($refresh_token)) {
-				$this->sendErrorResponse(GoAuth2::ERROR_INVALID_REQUEST);
+				$this->sendErrorResponse(GOAuth2::ERROR_INVALID_REQUEST);
 			}
 
 			// Refresh the access token
@@ -198,9 +227,9 @@
 		 * However, as noted in the specification, other authentication methods
 		 * (such as HTTP BASIC) or anonymous access may be permitted.
 		 *
-		 * @param String 	$client_id
-		 * @param String 	$client_secret
-		 * @param String	$authorization_header
+		 * @param String 	$client_id				The POSTs client_id field, or null if not present.
+		 * @param String 	$client_secret			The POSTs client_secret field, or null if not present.
+		 * @param String	$authorization_header	The Authorization: header of the request.
 		 */
 		private function authenticateClientRequest($client_id, $client_secret, $authorization_header) {
 
@@ -213,22 +242,22 @@
 
 					// Extracted the base64-encoded string from the header.
 					if(!preg_match('/^Authorization:\s+Basic\s+(\w+==)$/', $authorization_header, $matches)) {
-						$this->sendErrorResponse(GoAuth2::ERROR_INVALID_CLIENT);
+						$this->sendErrorResponse(GOAuth2::ERROR_INVALID_CLIENT);
 					}
 
 					// Decode the authorization information and check that it's in u:p form
 					try {
 						list($_, $authorization_string) = $matches;
-						list($username, $password) = explode(':', base64_decode($authorization_string));
+						list($client_id, $client_secret) = explode(':', base64_decode($authorization_string));
 					} catch(Exception $e) {
-						$this->sendErrorResponse(GoAuth2::ERROR_INVALID_CLIENT);
+						$this->sendErrorResponse(GOAuth2::ERROR_INVALID_CLIENT);
 					}
 
 					// Authenticate the HTTP BASIC credentials.
 					// NB: Currently we assume that the credentials being passed in the BASIC header
 					// are the client_id and client_secret.
 					// @todo: Generalise this.
-					$this->authenticateClientCredentials($username, $password);
+					$this->authenticateClientCredentials($client_id, $client_secret);
 
 					// Authentication was successful.
 					return;
@@ -249,7 +278,7 @@
 
 				default:
 					// Unknown authentication method.
-					throw new Exception('Unknown server authentication method specified.');
+					throw new Exception('Unknown server authentication method specified in server configuration.');
 					return;
 			}
 		}
@@ -264,7 +293,7 @@
 		 * 							specified in s5.2 of the OAuth 2.0 spec, eg
 		 * 							'invalid_request' or 'invalid_scope'.
 		 */
-		protected function sendErrorResponse($error = GoAuth2::ERROR_INVALID_REQUEST) {
+		protected function sendErrorResponse($error = GOAuth2::ERROR_INVALID_REQUEST) {
 			// Create the JSON response object
 			$error_object = array(
 				'error' 			=> $error,
@@ -336,15 +365,16 @@
 		 * This function MUST be reimplemented in the inheriting subclass.
 		 *
 		 * @param String	$client_id	The ID of the client who is requesting the token.
-		 * @param String	$for_user	Optional. If given, represents the username of the
-		 * 								resource owner on whose behalf the token is being
-		 * 								requested.
+		 * @param mixed		$user		Optional. If given, represents the means of
+		 * 								uniquely identifying the resource owner returned
+		 * 								by validateResourceOwnerCredentials().
 		 * @param String	$scope		Optional. If given, is a space-delimited string of
 		 * 								requested scopes.
 		 */
-		protected function checkTokenRequestScope($client_id, $for_user = null, $scope = null) {
+		protected function checkTokenRequestScope($client_id, $user = null, $scope = null) {
 			throw new Exception('checkTokenRequestScope() not implemented by server.');
 		}
+
 
 		/**
 		 * Generate and store an access token for the given client with
@@ -354,22 +384,31 @@
 		 *
 		 * @param	String	$client_id	The ID of the client to be given
 		 * 								the token.
-		 * @param	String	$for_user	Optional. If given, represents
+		 * @param	String	$user		Optional. If given, represents
 		 * 								the username of the resource
 		 * 								owner on whose behalf the token
 		 * 								is being generated.
 		 * @param	String	$scope		Optional. If given, a string of
 		 * 								space-delimited scope names.
 		 */
-		protected function generateAccessToken($client_id, $for_user = null, $scope = null) {
+		protected function generateAccessToken($client_id, $user = null, $scope = null) {
 			throw new Exception('generateAccessToken() not implemented by server.');
 		}
+
+
+		/**
+		 * FUNCTIONS THAT MUST BE REIMPLEMENTED IN SOME SCENARIOS
+		 *
+		 * The following functions MUST be reimplemented in any inheriting subclass
+		 * IF the inheriting Token Server needs to support the relevant feature.
+		 */
 
 		/**
 		 * Refresh and store an access token for the given client with
 		 * the given scope.
 		 *
-		 * This function MUST be reimplemented in the inheriting subclass.
+		 * This function MUST be reimplemented in the inheriting subclass if
+		 * the Token Server is to support refresh tokens.
 		 *
 		 * @param	String	$client_id		The ID of the client to be given
 		 * 									the token.
@@ -382,13 +421,6 @@
 			throw new Exception('refreshAccessToken() not implemented by server.');
 		}
 
-
-		/**
-		 * FUNCTIONS THAT MUST BE REIMPLEMENTED IN SOME SCENARIOS
-		 *
-		 * The following functions MUST be reimplemented in any inheriting subclass
-		 * IF the inheriting Token Server needs to support the relevant feature.
-		 */
 
 		/**
 		 * Generate and store an access token from the given authorization
@@ -405,6 +437,7 @@
 			throw new Exception('generateAccessTokenFromAuthorizationCode() not implemented by server.');
 		}
 
+
 		/**
 		 * Authenticate the given client credentials.  This function must be
 		 * reimplemented in the inheriting server subclass if that server
@@ -419,10 +452,13 @@
 			throw new Exception('authenticateClientCredentials() not implemented by server.');
 		}
 
+
 		/**
-		 * Validate the given resource owner credentials. This function must be
-		 * reimplemented in the inheriting subclass if the server needs to
-		 * support the resource owner credentials flow of access token grant.
+		 * Validate the given resource owner credentials, and return a value
+		 * that the server uses to uniquely identify the specific resource
+		 * owner (usually a user ID). This function must be reimplemented in
+		 * the inheriting subclass if the server needs to support the resource
+		 * owner credentials flow of access token grant.
 		 *
 		 * The OAuth specification notes that this flow should only be used
 		 * where there is a high level of trust between the resource owner
@@ -430,16 +466,22 @@
 		 * available. It is also used when migrating a client from a
 		 * stored-password approach to an access token approach.
 		 *
-		 * @param	String	$client_id		The ID of the client to be given
-		 * 									the token.
-		 * @param	String	$refresh_token	The refresh token provided by
-		 * 									the client.
-		 * @param	String	$scope			Optional. If given, a string of
-		 * 									space-delimited scope names.
+		 * @param	String	$username		The username of the resource owner.
+		 * @param	String	$password		The (plaintext) password of the resource
+		 * 									owner.
+		 *
+		 * @return	mixed	$user			A means for the resource server to
+		 * 									uniquely identify the resource owner.
+		 * 									This will typically be a user ID, or
+		 * 									perhaps a username. This return value
+		 * 									is passed to the access token generating
+		 * 									function.
 		 */
 		protected function validateResourceOwnerCredentials($username, $password) {
-			throw new Exception('validateResourceOwnerCredentials() not implemented by server.');
+			// By default, we don't support the password grant type.
+			$this->sendErrorResponse(GOAuth2::ERROR_UNSUPPORTED_GRANT_TYPE);
 		}
+
 
 		/**
 		 * Validate the given authorization code details. This function must
