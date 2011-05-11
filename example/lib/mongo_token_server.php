@@ -13,7 +13,7 @@
 		public function __construct() {
 			parent::__construct($token_type = GOAuth2::TOKEN_TYPE_MAC, GOAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $enforce_ssl = false);
 			$m = new Mongo();
-			$this->mongo = $m->goauth;
+			$this->mongo = $m->goauth2;
 		}
 
 		/**
@@ -21,7 +21,8 @@
 		 * @see GOAuth2TokenServer::authenticateClientCredentials()
 		 */
 		protected function authenticateClientCredentials($client_id, $client_secret) {
-			return ($this->mongo->clients->findOne(array("client_id" => $client_id, "client_secret" => $client_secret) !== null));
+			$client = $this->mongo->clients->findOne(array("client_id" => $client_id, "client_secret" => $client_secret));
+			return ($client !== null);
 		}
 
 		/**

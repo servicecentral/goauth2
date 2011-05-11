@@ -7,7 +7,7 @@
 		public function __construct() {
 			parent::__construct($enforce_ssl = false);
 			$m = new Mongo();
-			$this->mongo = $m->goauth;
+			$this->mongo = $m->goauth2;
 		}
 
 		/**

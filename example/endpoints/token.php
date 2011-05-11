@@ -5,7 +5,7 @@
 
 	$token_server = new MongoTokenServer();
 
-	// Get the authorization header from the request
+	// Get the authorization header from the request (Apache only - other HTTP servers should reimplement)
 	$headers = apache_request_headers();
 	$authorization_header = isset($headers['Authorization']) ? $headers['Authorization'] : '';
 
