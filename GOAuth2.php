@@ -291,7 +291,7 @@
 	class GOAuth2Exception extends Exception {
 		public function __construct($error, $error_description = null, $error_uri = null) {
 			$this->error 				= $error;
-			$this->error_description 	= $error_description;
+			$this->error_description 	= $error_description ? $error_description : GOAuth2::getErrorDescription($error);
 			$this->error_uri 			= $error_uri;
 		}
 
@@ -309,6 +309,9 @@
 	// Thrown when a call attempt is made without a token.
 	class GOAuth2NoTokenException 				extends GOAuth2Exception {}
 
+	// Thrown when a non-SSL connection is made when SSL is enforced.
+	class GOAuth2SSLException					extends	 GOAuth2Exception {}
+
 	/* The following Exception types mirror the errors that may be returned
 	 * by an OAuth2.0 Token Server as defined s5.2 of the specification. */
 	class GOAuth2InvalidRequestException 		extends  GOAuth2Exception {}
@@ -318,4 +321,3 @@
 	class GOAuth2UnsupportedGrantTypeException 	extends  GOAuth2Exception {}
 	class GOAuth2InvalidScopeException 			extends  GOAuth2Exception {}
 	class GOAuth2InvalidRedirectURIException 	extends  GOAuth2Exception {}
-	class GOAuth2SSLException					extends	 GOAuth2Exception {}

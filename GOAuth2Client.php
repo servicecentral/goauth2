@@ -327,10 +327,10 @@
 
 		/**
 		 * Make an HTTP request to an API endpoint, either via a GET or POST.
-		 * If an access token is passed, the request is formatted to use the
-		 * token's specified method of authentication - for example, if a MAC
-		 * type token is passed, the Authorization header of the request will
-		 * be set as needed.
+		 * If the client has a current token set and $use_token is true (default),
+		 * the token's information will be added to the HTTP request depending
+		 * on the token type - for example, using a HMAC token will result in
+		 * the request being signed.
 		 *
 		 * @param GOAuth2HttpRequest 	$request
 		 * @param Bool					$use_token
