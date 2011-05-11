@@ -318,3 +318,4 @@
 	class GOAuth2UnsupportedGrantTypeException 	extends  GOAuth2Exception {}
 	class GOAuth2InvalidScopeException 			extends  GOAuth2Exception {}
 	class GOAuth2InvalidRedirectURIException 	extends  GOAuth2Exception {}
+	class GOAuth2SSLException					extends	 GOAuth2Exception {}

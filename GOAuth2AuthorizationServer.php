@@ -11,6 +11,22 @@
 		// An array of URIs, indexed by error type, that may be provided to the client.
 		private $error_uris = array();
 
+		// Whether SSL is enforced on this authorization server.
+		private $enforce_ssl;
+
+		/**
+		 * Class Constructor
+		 *
+		 * @param Bool $enforce_ssl		Whether to enforce SSL connections (highly
+		 * 								recommended)
+		 *
+		 * @return AuthorizationServer
+		 */
+		public function __construct($enforce_ssl = true) {
+			$this->enforce_ssl = $enforce_ssl;
+		}
+
+
 		/**
 		 * Process an authorization request. This checks that all required parameters
 		 * are set, and that a client and redirect URI were provided. In compliance
@@ -38,6 +54,13 @@
 		 * @throws	GOAuth2InvalidRedirectURIException
 		 */
 		public function processAuthorizationRequest($get, $user = null, $user_decision = null) {
+
+			// Check SSL
+			if($this->enforce_ssl) {
+				if($_SERVER['HTTPS'] !== 'on') {
+					throw new GOAuth2SSLException('Attempted to connect to GOAuth2 authorization server over non-HTTPS channel.');
+				}
+			}
 
 			// Extract parameters from the GET request
 			$params = array('response_type', 'client_id', 'redirect_uri', 'scope', 'state');

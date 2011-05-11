@@ -17,6 +17,9 @@
 		// The algorithm used to generate HMAC signature.
 		protected $hmac_algorithm;
 
+		// Whether SSL is enforced.
+		protected $enforce_ssl;
+
 		// Whether the token server supports refresh tokens.
 		protected $support_refresh;
 
@@ -33,6 +36,8 @@
 		 *										themselves to the server. Defaults to client credentials,
 		 *										which requires client_id and client_secret to be passed
 		 *										with each request.
+		 * @param Bool	 $enforce_ssl			Whether to enforce SSL or not (highly recommended for
+		 * 										production websites). Defaults to true.
 		 * @param Bool	 $support_refresh		Whether the token server should support refresh tokens.
 		 * @param String $hmac_algorithm		The HMAC algorithm the server should use when calculating
 		 * 										comparison signature if the MAC token type is specified.
@@ -40,9 +45,10 @@
 		 *
 		 * @return GOAuth2TokenServer
 		 */
-		public function __construct($token_type = GOAuth2::TOKEN_TYPE_MAC, $client_auth_method = GOAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $support_refresh = true, $hmac_algorithm = GOAuth2::HMAC_SHA1) {
+		public function __construct($token_type = GOAuth2::TOKEN_TYPE_MAC, $client_auth_method = GOAuth2::SERVER_AUTH_TYPE_CREDENTIALS, $enforce_ssl = true, $support_refresh = true, $hmac_algorithm = GOAuth2::HMAC_SHA1) {
 			$this->token_type			= $token_type;
 			$this->client_auth_method 	= $client_auth_method;
+			$this->enforce_ssl			= $enforce_ssl;
 			$this->support_refresh		= $support_refresh;
 			$this->hmac_algorithm		= $hmac_algorithm;
 		}
@@ -55,6 +61,13 @@
 		 * @param String 	$authorization_header	The Authorization header field.
 		 */
 		public function handleTokenRequest($post, $authorization_header) {
+
+			// Check SSL
+			if($this->enforce_ssl) {
+				if($_SERVER['HTTPS'] !== 'on') {
+					throw new GOAuth2SSLException('Attempted to connect to GOAuth2 token server over non-HTTPS channel.');
+				}
+			}
 
 			// Check for required parameters.
 			if(!isset($post['grant_type'])) {
