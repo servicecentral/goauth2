@@ -336,8 +336,9 @@
 		 * @param	String	$response		The body of the response.
 		 * @param	String	$content_type	Optional .The content type of the response.
 		 * 									Defaults to 'application/json'.
+		 * @param   bool    $no_store       Send Cache-control no-store header
 		 */
-		private function sendResponse($status, $response, $content_type = GOAuth2::CONTENT_TYPE_JSON, $no_store = false) {
+		protected function sendResponse($status, $response, $content_type = GOAuth2::CONTENT_TYPE_JSON, $no_store = false) {
 			// Clean the output buffer to eliminate any whitespace.
 			@ob_end_clean();
 
