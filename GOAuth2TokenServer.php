@@ -195,7 +195,7 @@
 			$this->checkTokenRequestScope($client_id, $user, $scope);
 
 			// Get a new token
-			$token = $this->generateAccessToken($client_id, $username, $scope);
+			$token = $this->generateAccessToken($client_id, $user, $scope);
 
 			$this->sendResponse(GOAuth2::HTTP_200, $token->toJSON(), GOAuth2::CONTENT_TYPE_JSON, $no_store = true);
 		}
